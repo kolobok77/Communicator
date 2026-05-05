@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Voice Room - Communikator</title>
+<title>Voice Room - Communikator Pro</title>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -16,13 +16,13 @@
   --text: #e8e8f0; --muted: rgba(232,232,240,0.4);
 }
 html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
-  font-family: 'DM Mono', monospace; overflow:hidden; }
+  font-family: 'DM Mono', monospace; overflow:hidden; touch-action: manipulation; }
 
 .app { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
 .card { width:100%; max-width:440px; padding:0 20px; display:flex; flex-direction:column; align-items:center; }
 
 .logo { font-size:10px; font-weight:700; letter-spacing:0.36em; text-transform:uppercase;
-  color:var(--muted); margin-bottom:48px; display:flex; align-items:center; gap:12px; }
+  color:var(--muted); margin-bottom:40px; display:flex; align-items:center; gap:12px; }
 .logo::before, .logo::after { content:''; width:24px; height:1px; background:var(--border); }
 
 .orb { position:relative; width:172px; height:172px; margin-bottom:40px;
@@ -39,171 +39,6 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
 .orb-ico { width:34px; height:34px; color:var(--accent); filter:drop-shadow(0 0 10px rgba(126,255,245,0.4)); }
 .orb-tag { font-size:9px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
 
-.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:30px; animation: fadeIn 0.5s ease; }
+.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:20px; animation: fadeIn 0.5s ease; }
 .badge { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--green); letter-spacing:0.2em; font-weight:700; }
-.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
-.room-title { font-size:18px; color:var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
-
-.hang { width:70px; height:70px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
-  display:flex; align-items:center; justify-content:center; cursor:pointer; transition: 0.2s; }
-.hang:hover { border-color:var(--red); transform: scale(1.1); }
-
-@keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
-</style>
-</head>
-<body>
-<div class="app"><div id="root"></div></div>
-
-<script>
-// ── FIREBASE CONFIG ──
-const firebaseConfig = {
-  apiKey: "AIzaSyBNku1yfBpM-SR-24S9cTLlfYDr_0uqKSA",
-  databaseURL: "https://communikator-37260-default-rtdb.firebaseio.com",
-  projectId: "communikator-37260",
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-// ── STATE ──
-let STATE = 'idle'; 
-let roomName = '';
-let myPeerId = '';
-let peerInst = null;
-let rawStream = null;
-let activeCalls = {};
-
-const loadPeerJS = () => new Promise(res => {
-    if (window.Peer) return res();
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-    s.onload = res;
-    document.head.appendChild(s);
-});
-
-async function cleanup() {
-    if (roomName && myPeerId) {
-        await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
-    }
-    Object.values(activeCalls).forEach(call => call.close());
-    activeCalls = {};
-    if (rawStream) {
-        rawStream.getTracks().forEach(t => t.stop());
-        rawStream = null;
-    }
-    if (peerInst) {
-        peerInst.destroy();
-        peerInst = null;
-    }
-}
-
-// Глобальная функция сброса для кнопки
-function exitApp() {
-    window.location.hash = ''; // Очищаем хэш, чтобы не зайти снова
-    location.reload();
-}
-
-async function joinRoom(name) {
-    await cleanup();
-    roomName = name;
-    setS('joining');
-    
-    try {
-        await loadPeerJS();
-        myPeerId = Math.random().toString(36).substring(2, 10);
-        peerInst = new Peer(myPeerId);
-
-        peerInst.on('open', async (id) => {
-            rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            const myRef = db.ref(`rooms/${roomName}/${id}`);
-            myRef.set({ joinedAt: Date.now() });
-            myRef.onDisconnect().remove();
-
-            db.ref(`rooms/${roomName}`).on('child_added', (snapshot) => {
-                const otherPeerId = snapshot.key;
-                if (otherPeerId !== myPeerId && !activeCalls[otherPeerId]) {
-                    const call = peerInst.call(otherPeerId, rawStream);
-                    handleIncomingCall(call);
-                }
-            });
-            setS('connected');
-        });
-
-        peerInst.on('call', async (call) => {
-            if (!rawStream) rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            call.answer(rawStream);
-            handleIncomingCall(call);
-        });
-
-    } catch (err) {
-        setS('error');
-    }
-}
-
-function handleIncomingCall(call) {
-    activeCalls[call.peer] = call;
-    
-    call.on('stream', (remoteStream) => {
-        let audio = document.getElementById('audio-' + call.peer);
-        if (!audio) {
-            audio = document.createElement('audio');
-            audio.id = 'audio-' + call.peer;
-            // Критически важно для мобильных:
-            audio.setAttribute('autoplay', 'true');
-            audio.setAttribute('playsinline', 'true');
-            document.body.appendChild(audio);
-        }
-        audio.srcObject = remoteStream;
-        
-        // Принудительный старт для Chrome/Safari
-        audio.play().catch(e => console.log("Playback blocked by browser settings"));
-    });
-
-    call.on('close', () => {
-        const audio = document.getElementById('audio-' + call.peer);
-        if (audio) audio.remove();
-        delete activeCalls[call.peer];
-    });
-}
-
-function setS(s) { STATE = s; render(); }
-
-function render() {
-    const root = document.getElementById('root');
-    let html = '';
-
-    if (STATE === 'idle' || STATE === 'joining') {
-        const label = STATE === 'idle' ? 'ENTER ROOM' : 'WAITING...';
-        html = `<div class="orb" onclick="promptRoom()"><div class="ring"></div><div class="orb-face"><svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span class="orb-tag">${label}</span></div></div>`;
-    } else if (STATE === 'connected') {
-        html = `<div class="call-sec">
-            <div class="badge"><div class="bdot"></div>LIVE</div>
-            <div class="room-title">${roomName}</div>
-            <button class="hang" onclick="exitApp()">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--red)"><path d="M23.71 16.67C20.66 13.78 16.54 12 12 12c-4.54 0-8.66 1.78-11.71 4.67-.18.18-.29.43-.29.71 0 .28.11.53.29.71l2.48 2.48c.18.18.43.29.71.29.27 0 .52-.11.7-.28.79-.74 1.69-1.36 2.66-1.85.33-.16.56-.5.56-.9v-3.1c1.45-.47 3-.73 4.6-.73 1.6 0 3.15.26 4.6.72v3.1c0 .4.23.74.56.9.98.49 1.87 1.12 2.66 1.85.18.18.43.28.7.28.28 0 .53-.11.71-.29l2.48-2.48c.18-.18.29-.43.29-.71 0-.28-.11-.53-.29-.71z"/></svg>
-            </button>
-        </div>`;
-    } else {
-        html = `<div style="text-align:center"><p style="color:var(--red)">Connection Error</p><button style="margin-top:20px; background:none; border:1px solid var(--border); color:var(--text); padding:10px 20px; border-radius:8px" onclick="location.reload()">Retry</button></div>`;
-    }
-    
-    root.innerHTML = `<div class="card"><div class="logo">VOICE</div>${html}</div>`;
-}
-
-function promptRoom() {
-    const name = prompt("Enter room name:", "general");
-    if (name) {
-        window.location.hash = name;
-        joinRoom(name);
-    }
-}
-
-window.onload = () => {
-    const hash = window.location.hash.substring(1);
-    if (hash) joinRoom(hash);
-    else render();
-};
-</script>
-</body>
-</html>
+.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 1
