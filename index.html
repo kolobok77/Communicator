@@ -22,10 +22,10 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
 .card { width:100%; max-width:440px; padding:0 20px; display:flex; flex-direction:column; align-items:center; }
 
 .logo { font-size:10px; font-weight:700; letter-spacing:0.36em; text-transform:uppercase;
-  color:var(--muted); margin-bottom:40px; display:flex; align-items:center; gap:12px; }
+  color:var(--muted); margin-bottom:30px; display:flex; align-items:center; gap:12px; }
 .logo::before, .logo::after { content:''; width:24px; height:1px; background:var(--border); }
 
-.orb { position:relative; width:172px; height:172px; margin-bottom:40px;
+.orb { position:relative; width:140px; height:140px; margin-bottom:30px;
   cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; }
 .ring { position:absolute; inset:0; border-radius:50%; border:1px solid rgba(126,255,245,0.14);
   transition: transform 0.5s; animation: pulse 2s infinite; }
@@ -36,38 +36,39 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
   border:1px solid rgba(126,255,245,0.18);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; }
 
-.orb-ico { width:34px; height:34px; color:var(--accent); filter:drop-shadow(0 0 10px rgba(126,255,245,0.4)); }
-.orb-tag { font-size:9px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
+.orb-ico { width:28px; height:28px; color:var(--accent); filter:drop-shadow(0 0 10px rgba(126,255,245,0.4)); }
+.orb-tag { font-size:8px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
 
-.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:20px; animation: fadeIn 0.5s ease; }
-.badge { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--green); letter-spacing:0.2em; font-weight:700; }
+.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:15px; animation: fadeIn 0.5s ease; }
+.badge { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--green); letter-spacing:0.2em; font-weight:700; margin-bottom: 5px;}
 .bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
 
-/* Список пользователей */
-.user-list { width:100%; max-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin: 10px 0; scrollbar-width: none; }
+.user-list { width:100%; max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin: 5px 0; scrollbar-width: none; }
 .user-item { 
-    background: var(--surf); border: 1px solid var(--border); padding: 8px 12px; 
-    border-radius: 8px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;
+    background: var(--surf); border: 1px solid var(--border); padding: 10px 14px; 
+    border-radius: 10px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;
+    transition: all 0.3s ease;
 }
-.user-id { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
-.user-status { color: var(--green); font-weight: 700; font-size: 8px; text-transform: uppercase; }
-.user-item.me { border-color: var(--accent); background: rgba(126,255,245,0.03); }
+.user-id { color: var(--muted); font-family: 'DM Mono', monospace; }
+.user-status { font-weight: 700; font-size: 8px; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; }
+.user-item.me { border-color: var(--accent); background: rgba(126,255,245,0.05); }
 .user-item.me .user-id { color: var(--accent); }
 
 .hang { width:60px; height:60px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
-  display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:10px; }
+  display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:20px; transition: 0.2s; }
+.hang:hover { border-color: var(--red); transform: scale(1.1); }
 
 #unmute-btn { 
-    display:none; position:fixed; bottom:20px; background:var(--green); color:#000;
-    padding:12px 24px; border-radius:30px; font-weight:700; font-size:12px;
-    box-shadow: 0 10px 20px rgba(126,255,160,0.2); z-index:100; border:none;
+    display:none; position:fixed; bottom:30px; background:var(--green); color:#000;
+    padding:15px 30px; border-radius:40px; font-weight:700; font-size:12px;
+    box-shadow: 0 10px 30px rgba(126,255,160,0.3); z-index:100; border:none; cursor:pointer;
 }
 @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
 </style>
 </head>
 <body>
 <div class="app"><div id="root"></div></div>
-<button id="unmute-btn" onclick="unlockAudio()">TAP TO ENABLE SOUND</button>
+<button id="unmute-btn" onclick="unlockAudio()">ACTIVATE SOUND</button>
 
 <script>
 const firebaseConfig = {
@@ -85,7 +86,7 @@ let myPeerId = '';
 let peerInst = null;
 let rawStream = null;
 let activeCalls = {};
-let participants = []; // Локальный список участников из БД
+let participants = [];
 
 const loadPeerJS = () => new Promise(res => {
     if (window.Peer) return res();
@@ -96,23 +97,26 @@ const loadPeerJS = () => new Promise(res => {
 });
 
 function unlockAudio() {
-    Object.values(activeCalls).forEach(call => {
-        const audio = document.getElementById('audio-' + call.peer);
-        if (audio) audio.play();
-    });
+    document.querySelectorAll('audio').forEach(a => a.play().catch(e => {}));
     document.getElementById('unmute-btn').style.display = 'none';
 }
 
 async function cleanup() {
+    // 1. Удаляем аудио-элементы
+    document.querySelectorAll('audio').forEach(a => a.remove());
+    // 2. Удаляемся из БД
     if (roomName && myPeerId) {
         await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
     }
-    Object.values(activeCalls).forEach(call => call.close());
+    // 3. Закрываем звонки
+    Object.values(activeCalls).forEach(call => { try { call.close(); } catch(e) {} });
     activeCalls = {};
+    // 4. Гасим микрофон
     if (rawStream) {
         rawStream.getTracks().forEach(t => t.stop());
         rawStream = null;
     }
+    // 5. Убиваем Peer
     if (peerInst) {
         peerInst.destroy();
         peerInst = null;
@@ -135,20 +139,20 @@ async function joinRoom(name) {
         peerInst = new Peer(myPeerId);
 
         peerInst.on('open', async (id) => {
-            rawStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+            rawStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
             
             const myRef = db.ref(`rooms/${roomName}/${id}`);
-            myRef.set({ status: 'online' });
+            myRef.set({ status: 'online', joined: Date.now() });
             myRef.onDisconnect().remove();
 
-            // Подписка на список участников для UI
+            // Слушаем список участников
             db.ref(`rooms/${roomName}`).on('value', (snapshot) => {
                 const data = snapshot.val() || {};
                 participants = Object.keys(data);
-                render(); // Перерисовываем список при любых изменениях
+                render(); 
             });
 
-            // Авто-звонок тем, кто уже в базе
+            // Авто-звонок
             db.ref(`rooms/${roomName}`).once('value', (snapshot) => {
                 snapshot.forEach((child) => {
                     const otherId = child.key;
@@ -169,12 +173,17 @@ async function joinRoom(name) {
         });
 
     } catch (err) {
+        console.error(err);
         setS('error');
     }
 }
 
 function handleStream(call) {
     activeCalls[call.peer] = call;
+    
+    // Сразу обновляем UI, чтобы сменить Waiting на Connected
+    render();
+
     call.on('stream', (stream) => {
         let audio = document.getElementById('audio-' + call.peer);
         if (!audio) {
@@ -188,12 +197,19 @@ function handleStream(call) {
         audio.play().catch(() => {
             document.getElementById('unmute-btn').style.display = 'block';
         });
+        render(); // Еще раз для надежности
     });
+
     call.on('close', () => {
         const audio = document.getElementById('audio-' + call.peer);
         if (audio) audio.remove();
         delete activeCalls[call.peer];
         render(); 
+    });
+    
+    call.on('error', () => {
+        delete activeCalls[call.peer];
+        render();
     });
 }
 
@@ -205,16 +221,15 @@ function render() {
 
     if (STATE === 'idle' || STATE === 'joining') {
         const label = STATE === 'idle' ? 'START' : 'SYNCING...';
-        html = `<div class="orb" onclick="promptRoom()"><div class="ring"></div><div class="orb-face"><svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg><span class="orb-tag">${label}</span></div></div>`;
+        html = `<div class="orb" onclick="promptRoom()"><div class="ring"></div><div class="ring"></div><div class="orb-face"><svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg><span class="orb-tag">${label}</span></div></div>`;
     } else if (STATE === 'connected') {
-        // Формируем список пользователей
         const userElements = participants.map(pid => {
             const isMe = pid === myPeerId;
-            const isConnected = isMe || activeCalls[pid];
+            const isConnected = isMe || (activeCalls[pid]);
             return `
                 <div class="user-item ${isMe ? 'me' : ''}">
-                    <span class="user-id">${pid} ${isMe ? '(YOU)' : ''}</span>
-                    <span class="user-status" style="color: ${isConnected ? 'var(--green)' : 'var(--muted)'}">
+                    <span class="user-id">${pid.split('_')[1]} ${isMe ? '(YOU)' : ''}</span>
+                    <span class="user-status" style="background: ${isConnected ? 'rgba(126,255,160,0.1)' : 'rgba(255,255,255,0.05)'}; color: ${isConnected ? 'var(--green)' : 'var(--muted)'}">
                         ${isConnected ? 'Connected' : 'Waiting...'}
                     </span>
                 </div>
@@ -223,11 +238,7 @@ function render() {
 
         html = `<div class="call-sec">
             <div class="badge"><div class="bdot"></div>ROOM: ${roomName}</div>
-            
-            <div class="user-list">
-                ${userElements}
-            </div>
-
+            <div class="user-list">${userElements}</div>
             <button class="hang" onclick="exitApp()">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--red)"><path d="M23.71 16.67C20.66 13.78 16.54 12 12 12c-4.54 0-8.66 1.78-11.71 4.67-.18.18-.29.43-.29.71 0 .28.11.53.29.71l2.48 2.48c.18.18.43.29.71.29.27 0 .52-.11.7-.28.79-.74 1.69-1.36 2.66-1.85.33-.16.56-.5.56-.9v-3.1c1.45-.47 3-.73 4.6-.73 1.6 0 3.15.26 4.6.72v3.1c0 .4.23.74.56.9.98.49 1.87 1.12 2.66 1.85.18.18.43.28.7.28.28 0 .53-.11.71-.29l2.48-2.48c.18-.18.29-.43.29-.71 0-.28-.11-.53-.29-.71z"/></svg>
             </button>
