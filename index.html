@@ -41,4 +41,213 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
 
 .call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:20px; animation: fadeIn 0.5s ease; }
 .badge { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--green); letter-spacing:0.2em; font-weight:700; }
-.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 1
+.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
+
+/* Список пользователей */
+.user-list { width:100%; max-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin: 10px 0; scrollbar-width: none; }
+.user-item { 
+    background: var(--surf); border: 1px solid var(--border); padding: 8px 12px; 
+    border-radius: 8px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;
+}
+.user-id { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.user-status { color: var(--green); font-weight: 700; font-size: 8px; text-transform: uppercase; }
+.user-item.me { border-color: var(--accent); background: rgba(126,255,245,0.03); }
+.user-item.me .user-id { color: var(--accent); }
+
+.hang { width:60px; height:60px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:10px; }
+
+#unmute-btn { 
+    display:none; position:fixed; bottom:20px; background:var(--green); color:#000;
+    padding:12px 24px; border-radius:30px; font-weight:700; font-size:12px;
+    box-shadow: 0 10px 20px rgba(126,255,160,0.2); z-index:100; border:none;
+}
+@keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+</style>
+</head>
+<body>
+<div class="app"><div id="root"></div></div>
+<button id="unmute-btn" onclick="unlockAudio()">TAP TO ENABLE SOUND</button>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBNku1yfBpM-SR-24S9cTLlfYDr_0uqKSA",
+  databaseURL: "https://communikator-37260-default-rtdb.firebaseio.com",
+  projectId: "communikator-37260",
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let STATE = 'idle'; 
+let roomName = '';
+let myPeerId = '';
+let peerInst = null;
+let rawStream = null;
+let activeCalls = {};
+let participants = []; // Локальный список участников из БД
+
+const loadPeerJS = () => new Promise(res => {
+    if (window.Peer) return res();
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload = res;
+    document.head.appendChild(s);
+});
+
+function unlockAudio() {
+    Object.values(activeCalls).forEach(call => {
+        const audio = document.getElementById('audio-' + call.peer);
+        if (audio) audio.play();
+    });
+    document.getElementById('unmute-btn').style.display = 'none';
+}
+
+async function cleanup() {
+    if (roomName && myPeerId) {
+        await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
+    }
+    Object.values(activeCalls).forEach(call => call.close());
+    activeCalls = {};
+    if (rawStream) {
+        rawStream.getTracks().forEach(t => t.stop());
+        rawStream = null;
+    }
+    if (peerInst) {
+        peerInst.destroy();
+        peerInst = null;
+    }
+}
+
+function exitApp() {
+    window.location.hash = '';
+    cleanup().then(() => { location.reload(); });
+}
+
+async function joinRoom(name) {
+    await cleanup();
+    roomName = name;
+    setS('joining');
+    
+    try {
+        await loadPeerJS();
+        myPeerId = 'user_' + Math.random().toString(36).substring(2, 7) + '_' + Date.now().toString().slice(-3);
+        peerInst = new Peer(myPeerId);
+
+        peerInst.on('open', async (id) => {
+            rawStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+            
+            const myRef = db.ref(`rooms/${roomName}/${id}`);
+            myRef.set({ status: 'online' });
+            myRef.onDisconnect().remove();
+
+            // Подписка на список участников для UI
+            db.ref(`rooms/${roomName}`).on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                participants = Object.keys(data);
+                render(); // Перерисовываем список при любых изменениях
+            });
+
+            // Авто-звонок тем, кто уже в базе
+            db.ref(`rooms/${roomName}`).once('value', (snapshot) => {
+                snapshot.forEach((child) => {
+                    const otherId = child.key;
+                    if (otherId !== myPeerId) {
+                        const call = peerInst.call(otherId, rawStream);
+                        handleStream(call);
+                    }
+                });
+            });
+
+            setS('connected');
+        });
+
+        peerInst.on('call', async (call) => {
+            if (!rawStream) rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            call.answer(rawStream);
+            handleStream(call);
+        });
+
+    } catch (err) {
+        setS('error');
+    }
+}
+
+function handleStream(call) {
+    activeCalls[call.peer] = call;
+    call.on('stream', (stream) => {
+        let audio = document.getElementById('audio-' + call.peer);
+        if (!audio) {
+            audio = document.createElement('audio');
+            audio.id = 'audio-' + call.peer;
+            audio.setAttribute('autoplay', 'true');
+            audio.setAttribute('playsinline', 'true');
+            document.body.appendChild(audio);
+        }
+        audio.srcObject = stream;
+        audio.play().catch(() => {
+            document.getElementById('unmute-btn').style.display = 'block';
+        });
+    });
+    call.on('close', () => {
+        const audio = document.getElementById('audio-' + call.peer);
+        if (audio) audio.remove();
+        delete activeCalls[call.peer];
+        render(); 
+    });
+}
+
+function setS(s) { STATE = s; render(); }
+
+function render() {
+    const root = document.getElementById('root');
+    let html = '';
+
+    if (STATE === 'idle' || STATE === 'joining') {
+        const label = STATE === 'idle' ? 'START' : 'SYNCING...';
+        html = `<div class="orb" onclick="promptRoom()"><div class="ring"></div><div class="orb-face"><svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg><span class="orb-tag">${label}</span></div></div>`;
+    } else if (STATE === 'connected') {
+        // Формируем список пользователей
+        const userElements = participants.map(pid => {
+            const isMe = pid === myPeerId;
+            const isConnected = isMe || activeCalls[pid];
+            return `
+                <div class="user-item ${isMe ? 'me' : ''}">
+                    <span class="user-id">${pid} ${isMe ? '(YOU)' : ''}</span>
+                    <span class="user-status" style="color: ${isConnected ? 'var(--green)' : 'var(--muted)'}">
+                        ${isConnected ? 'Connected' : 'Waiting...'}
+                    </span>
+                </div>
+            `;
+        }).join('');
+
+        html = `<div class="call-sec">
+            <div class="badge"><div class="bdot"></div>ROOM: ${roomName}</div>
+            
+            <div class="user-list">
+                ${userElements}
+            </div>
+
+            <button class="hang" onclick="exitApp()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--red)"><path d="M23.71 16.67C20.66 13.78 16.54 12 12 12c-4.54 0-8.66 1.78-11.71 4.67-.18.18-.29.43-.29.71 0 .28.11.53.29.71l2.48 2.48c.18.18.43.29.71.29.27 0 .52-.11.7-.28.79-.74 1.69-1.36 2.66-1.85.33-.16.56-.5.56-.9v-3.1c1.45-.47 3-.73 4.6-.73 1.6 0 3.15.26 4.6.72v3.1c0 .4.23.74.56.9.98.49 1.87 1.12 2.66 1.85.18.18.43.28.7.28.28 0 .53-.11.71-.29l2.48-2.48c.18-.18.29-.43.29-.71 0-.28-.11-.53-.29-.71z"/></svg>
+            </button>
+        </div>`;
+    } else {
+        html = `<div style="text-align:center"><p>Connection Error</p><button onclick="location.reload()">Reset</button></div>`;
+    }
+    root.innerHTML = `<div class="card"><div class="logo">COMMUNIKATOR</div>${html}</div>`;
+}
+
+function promptRoom() {
+    const name = prompt("Room name:", "general");
+    if (name) { window.location.hash = name; joinRoom(name); }
+}
+
+window.onload = () => {
+    const hash = window.location.hash.substring(1);
+    if (hash) joinRoom(hash);
+    else render();
+};
+</script>
+</body>
+</html>
