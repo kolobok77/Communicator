@@ -83,7 +83,8 @@ let timerSecs = 0;
 let timerInterval = null;
 let peerInst = null;
 let localStream = null;
-let activeCall = null; // ТРЕКЕР ТЕКУЩЕГО ЗВОНКА
+let rawStream = null; // ТРЕКЕР СЫРОГО ПОТОКА МИКРОФОНА
+let activeCall = null; 
 let audioCtx = null;
 let remoteAudio = null;
 
@@ -108,14 +109,24 @@ async function processStream(stream) {
 
 function cleanup() {
     stopTimer();
-    // 1. Сначала закрываем сам звонок, чтобы отправить сигнал "close" второй стороне
+    
+    // 1. Закрываем звонок
     if (activeCall) { 
         activeCall.close(); 
         activeCall = null; 
     }
-    // 2. Останавливаем микрофон
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    // 3. Уничтожаем Peer
+
+    // 2. ОСТАНАВЛИВАЕМ ВСЕ ТРЕКИ МИКРОФОНА (чтобы погас индикатор)
+    if (rawStream) {
+        rawStream.getTracks().forEach(track => track.stop());
+        rawStream = null;
+    }
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    // 3. Уничтожаем Peer и AudioContext
     if (peerInst) { try { peerInst.disconnect(); peerInst.destroy(); } catch(e){} peerInst = null; }
     if (audioCtx) { audioCtx.close(); audioCtx = null; }
     if (remoteAudio) { remoteAudio.srcObject = null; if (remoteAudio.parentNode) remoteAudio.parentNode.removeChild(remoteAudio); remoteAudio = null; }
@@ -131,12 +142,13 @@ async function handleStart() {
         peerInst.on('open', id => { peerId = id; setS('waiting'); });
         peerInst.on('call', async call => {
             activeCall = call;
-            const rawStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+            // Сохраняем ссылку на rawStream, чтобы потом его остановить
+            rawStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
             localStream = await processStream(rawStream);
             call.answer(localStream);
             
             call.on('stream', remote => { setupRemoteAudio(remote); setS('connected'); startTimer(); });
-            call.on('close', handleHangup); // Если вторая сторона нажмет сброс
+            call.on('close', handleHangup);
             call.on('error', handleHangup);
         });
     } catch (e) { setS('error', 'Mic Error'); }
@@ -149,12 +161,12 @@ async function handleJoin(tid) {
         await loadPeerJS();
         peerInst = new Peer(Math.random().toString(36).substring(2, 12));
         peerInst.on('open', async () => {
-            const rawStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+            rawStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
             localStream = await processStream(rawStream);
             activeCall = peerInst.call(tid, localStream);
             
             activeCall.on('stream', remote => { setupRemoteAudio(remote); setS('connected'); startTimer(); });
-            activeCall.on('close', handleHangup); // Важно: реагируем на сброс хоста
+            activeCall.on('close', handleHangup);
             activeCall.on('error', handleHangup);
         });
     } catch (e) { setS('error', 'Join Error'); }
@@ -226,4 +238,3 @@ window.addEventListener('hashchange', boot);
 </script>
 </body>
 </html>
-
