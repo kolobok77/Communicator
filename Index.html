@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Voice AI - Sync Hangup</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f; --surf: #12121a; --border: rgba(255,255,255,0.07);
+  --accent: #7efff5; --red: #ff6b6b; --green: #7effa0;
+  --text: #e8e8f0; --muted: rgba(232,232,240,0.4);
+}
+html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
+  font-family: 'DM Mono', 'Courier New', monospace; overflow:hidden; }
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+.app { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+.card { width:100%; max-width:440px; padding:0 20px; display:flex; flex-direction:column; align-items:center; gap:0; }
+
+.logo { font-size:10px; font-weight:700; letter-spacing:0.36em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:48px; display:flex; align-items:center; gap:12px; }
+.logo::before, .logo::after { content:''; width:24px; height:1px; background:var(--border); }
+
+.orb { position:relative; width:172px; height:172px; margin-bottom:40px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; }
+.ring { position:absolute; inset:0; border-radius:50%; border:1px solid rgba(126,255,245,0.14);
+  transition: transform 0.5s cubic-bezier(0.16,1,0.3,1), opacity 0.35s; }
+.ring:nth-child(2) { inset:-13px; border-color:rgba(126,255,245,0.05); }
+.ring:nth-child(3) { inset:-28px; border-color:rgba(126,255,245,0.022); }
+.orb:hover .ring  { transform:scale(1.05); }
+.orb-face { position:absolute; inset:0; border-radius:50%;
+  background:radial-gradient(circle at 34% 32%, #1a2828, #0c0c13);
+  border:1px solid rgba(126,255,245,0.18);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;
+  transition: all 0.3s; }
+.orb:hover .orb-face { border-color:rgba(126,255,245,0.45); box-shadow: 0 0 36px rgba(126,255,245,0.09); }
+.orb-ico { width:34px; height:34px; color:var(--accent); filter:drop-shadow(0 0 10px rgba(126,255,245,0.4)); }
+.orb-tag { font-size:9px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
+
+.link-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:13px;
+  animation: up 0.45s cubic-bezier(0.16,1,0.3,1) both; }
+.link-row { width:100%; background:var(--surf); border:1px solid var(--border); border-radius:11px;
+  display:flex; align-items:center; overflow:hidden; }
+.link-val { flex:1; padding:13px 12px; font-size:9px; color:var(--accent); white-space:nowrap; overflow-x: auto; scrollbar-width: none; }
+.copy { padding:13px 16px; background:none; border:none; border-left:1px solid var(--border);
+  color:var(--muted); cursor:pointer; font:700 9px 'DM Mono',monospace; transition:all 0.18s; }
+.copy:hover { color:var(--accent); background:rgba(126,255,245,0.04); }
+.copy.ok { color:var(--green); }
+
+.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:30px; animation: fadeIn 0.4s ease both; }
+.badge { display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; color:var(--green); letter-spacing:0.2em; }
+.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
+.timer { font-size:42px; font-weight:300; letter-spacing:.05em; font-variant-numeric: tabular-nums; }
+
+.wav { display:flex; align-items:center; gap:4px; height:34px; }
+.bar { width:3px; height: 100%; border-radius:3px; background:var(--accent); transform-origin: bottom; animation: wv 0.8s infinite alternate; opacity: 0.7; }
+@keyframes wv { from{transform:scaleY(0.1)} to{transform:scaleY(1)} }
+
+.hang { width:70px; height:70px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s; }
+.hang:hover { border-color:var(--red); transform:scale(1.05); }
+.hang-ico { width:26px; height:26px; color:var(--red); }
+
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes up { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+<div class="app"><div id="root"></div></div>
+
+<script>
+// ── CONFIG ──
+const AUDIO_CONSTRAINTS = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true
+};
+
+let STATE = 'idle'; 
+let peerId = '';
+let timerSecs = 0;
+let timerInterval = null;
+let peerInst = null;
+let localStream = null;
+let activeCall = null; // ТРЕКЕР ТЕКУЩЕГО ЗВОНКА
+let audioCtx = null;
+let remoteAudio = null;
+
+const loadPeerJS = () => new Promise(res => {
+    if (window.Peer) return res();
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload = res;
+    document.head.appendChild(s);
+});
+
+async function processStream(stream) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const source = audioCtx.createMediaStreamSource(stream);
+    const destination = audioCtx.createMediaStreamDestination();
+    const hp = audioCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 150;
+    const comp = audioCtx.createDynamicsCompressor(); comp.threshold.value = -30;
+    source.connect(hp); hp.connect(comp); comp.connect(destination);
+    return destination.stream;
+}
+
+function cleanup() {
+    stopTimer();
+    // 1. Сначала закрываем сам звонок, чтобы отправить сигнал "close" второй стороне
+    if (activeCall) { 
+        activeCall.close(); 
+        activeCall = null; 
+    }
+    // 2. Останавливаем микрофон
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    // 3. Уничтожаем Peer
+    if (peerInst) { try { peerInst.disconnect(); peerInst.destroy(); } catch(e){} peerInst = null; }
+    if (audioCtx) { audioCtx.close(); audioCtx = null; }
+    if (remoteAudio) { remoteAudio.srcObject = null; if (remoteAudio.parentNode) remoteAudio.parentNode.removeChild(remoteAudio); remoteAudio = null; }
+    peerId = '';
+}
+
+async function handleStart() {
+    cleanup();
+    setS('creating');
+    try {
+        await loadPeerJS();
+        peerInst = new Peer(Math.random().toString(36).substring(2, 12));
+        peerInst.on('open', id => { peerId = id; setS('waiting'); });
+        peerInst.on('call', async call => {
+            activeCall = call;
+            const rawStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+            localStream = await processStream(rawStream);
+            call.answer(localStream);
+            
+            call.on('stream', remote => { setupRemoteAudio(remote); setS('connected'); startTimer(); });
+            call.on('close', handleHangup); // Если вторая сторона нажмет сброс
+            call.on('error', handleHangup);
+        });
+    } catch (e) { setS('error', 'Mic Error'); }
+}
+
+async function handleJoin(tid) {
+    cleanup();
+    setS('joining');
+    try {
+        await loadPeerJS();
+        peerInst = new Peer(Math.random().toString(36).substring(2, 12));
+        peerInst.on('open', async () => {
+            const rawStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+            localStream = await processStream(rawStream);
+            activeCall = peerInst.call(tid, localStream);
+            
+            activeCall.on('stream', remote => { setupRemoteAudio(remote); setS('connected'); startTimer(); });
+            activeCall.on('close', handleHangup); // Важно: реагируем на сброс хоста
+            activeCall.on('error', handleHangup);
+        });
+    } catch (e) { setS('error', 'Join Error'); }
+}
+
+function setupRemoteAudio(stream) {
+    if (!remoteAudio) {
+        remoteAudio = document.createElement('audio');
+        remoteAudio.autoplay = true;
+        remoteAudio.setAttribute('playsinline', 'true');
+        document.body.appendChild(remoteAudio);
+    }
+    remoteAudio.srcObject = stream;
+}
+
+function handleHangup() {
+    cleanup();
+    window.history.replaceState({}, '', window.location.pathname);
+    setS('idle');
+}
+
+function startTimer() {
+    stopTimer();
+    timerInterval = setInterval(() => {
+        timerSecs++;
+        const el = document.getElementById('timer-display');
+        if (el) el.innerText = String(Math.floor(timerSecs/60)).padStart(2,'0') + ':' + String(timerSecs%60).padStart(2,'0');
+    }, 1000);
+}
+
+function stopTimer() { clearInterval(timerInterval); timerInterval = null; timerSecs = 0; }
+
+function setS(s, msg = '') { STATE = s; render(); }
+
+async function doCopy() {
+    const fullUrl = window.location.href.split('#')[0] + '#' + peerId;
+    await navigator.clipboard.writeText(fullUrl);
+    const btn = document.getElementById('copy-btn');
+    if (btn) { btn.innerText = 'OK'; setTimeout(() => btn.innerText = 'COPY', 2000); }
+}
+
+function render() {
+    const root = document.getElementById('root');
+    const fullUrl = peerId ? window.location.href.split('#')[0] + '#' + peerId : '';
+    let html = '';
+
+    if (STATE === 'idle' || STATE === 'creating' || STATE === 'waiting') {
+        const label = STATE === 'idle' ? 'START CALL' : STATE === 'creating' ? '...' : 'WAITING';
+        html = `<div class="orb" id="orb-main"><div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="orb-face"><svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span class="orb-tag">${label}</span></div></div>`;
+    }
+    if (STATE === 'waiting') html += `<div class="link-sec"><div class="link-row"><span class="link-val">${fullUrl}</span><button id="copy-btn" class="copy" onclick="doCopy()">COPY</button></div></div>`;
+    if (STATE === 'connected') {
+        html = `<div class="call-sec"><div class="badge"><div class="bdot"></div>LIVE</div><div id="timer-display" class="timer">00:00</div><div class="wav">${Array(10).fill('<div class="bar"></div>').join('')}</div><button class="hang" onclick="handleHangup()"><svg class="hang-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M23.71 16.67C20.66 13.78 16.54 12 12 12c-4.54 0-8.66 1.78-11.71 4.67-.18.18-.29.43-.29.71 0 .28.11.53.29.71l2.48 2.48c.18.18.43.29.71.29.27 0 .52-.11.7-.28.79-.74 1.69-1.36 2.66-1.85.33-.16.56-.5.56-.9v-3.1c1.45-.47 3-.73 4.6-.73 1.6 0 3.15.26 4.6.72v3.1c0 .4.23.74.56.9.98.49 1.87 1.12 2.66 1.85.18.18.43.28.7.28.28 0 .53-.11.71-.29l2.48-2.48c.18-.18.29-.43.29-.71 0-.28-.11-.53-.29-.71z"/></svg></button></div>`;
+    }
+    if (STATE === 'error') html = `<div class="err-sec"><p class="err-msg">Error occurred</p><button class="retry" onclick="handleHangup()">RESET</button></div>`;
+
+    root.innerHTML = `<div class="card"><div class="logo">VOICE</div>${html}</div>`;
+    const orb = document.getElementById('orb-main');
+    if (orb && STATE === 'idle') orb.onclick = handleStart;
+}
+
+const boot = () => {
+    const hash = window.location.hash.substring(1);
+    if (hash.length > 5) handleJoin(hash);
+    else render();
+};
+window.addEventListener('load', boot);
+window.addEventListener('hashchange', boot);
+</script>
+</body>
+</html>
+
