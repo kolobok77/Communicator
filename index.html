@@ -25,6 +25,17 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
   color:var(--muted); margin-bottom:30px; display:flex; align-items:center; gap:12px; }
 .logo::before, .logo::after { content:''; width:24px; height:1px; background:var(--border); }
 
+/* Оверлей для активации звука */
+#audio-gate {
+    position: fixed; inset: 0; background: var(--bg); z-index: 1000;
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+}
+.gate-btn {
+    background: var(--accent); color: #000; border: none; padding: 18px 36px;
+    border-radius: 40px; font-weight: 700; font-size: 14px; cursor: pointer;
+    box-shadow: 0 0 30px rgba(126,255,245,0.3);
+}
+
 .orb { position:relative; width:140px; height:140px; margin-bottom:30px;
   cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; }
 .ring { position:absolute; inset:0; border-radius:50%; border:1px solid rgba(126,255,245,0.14);
@@ -47,7 +58,6 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
 .user-item { 
     background: var(--surf); border: 1px solid var(--border); padding: 10px 14px; 
     border-radius: 10px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;
-    transition: all 0.3s ease;
 }
 .user-id { color: var(--muted); font-family: 'DM Mono', monospace; }
 .user-status { font-weight: 700; font-size: 8px; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; }
@@ -55,20 +65,19 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
 .user-item.me .user-id { color: var(--accent); }
 
 .hang { width:60px; height:60px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
-  display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:20px; transition: 0.2s; }
-.hang:hover { border-color: var(--red); transform: scale(1.1); }
+  display:flex; align-items:center; justify-content:center; cursor:pointer; margin-top:20px; }
 
-#unmute-btn { 
-    display:none; position:fixed; bottom:30px; background:var(--green); color:#000;
-    padding:15px 30px; border-radius:40px; font-weight:700; font-size:12px;
-    box-shadow: 0 10px 30px rgba(126,255,160,0.3); z-index:100; border:none; cursor:pointer;
-}
 @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
 </style>
 </head>
 <body>
-<div class="app"><div id="root"></div></div>
-<button id="unmute-btn" onclick="unlockAudio()">ACTIVATE SOUND</button>
+    <div id="audio-gate">
+        <div class="logo">COMMUNIKATOR</div>
+        <button class="gate-btn" onclick="startWithAudio()">JOIN WITH AUDIO</button>
+        <p style="font-size: 10px; color: var(--muted);">Click to enable loudspeaker</p>
+    </div>
+
+    <div class="app"><div id="root"></div></div>
 
 <script>
 const firebaseConfig = {
@@ -87,6 +96,7 @@ let peerInst = null;
 let rawStream = null;
 let activeCalls = {};
 let participants = [];
+let pendingRoom = '';
 
 const loadPeerJS = () => new Promise(res => {
     if (window.Peer) return res();
@@ -96,27 +106,26 @@ const loadPeerJS = () => new Promise(res => {
     document.head.appendChild(s);
 });
 
-function unlockAudio() {
-    document.querySelectorAll('audio').forEach(a => a.play().catch(e => {}));
-    document.getElementById('unmute-btn').style.display = 'none';
+// ПРИНУДИТЕЛЬНЫЙ СТАРТ ЗВУКА
+async function startWithAudio() {
+    document.getElementById('audio-gate').style.display = 'none';
+    // Создаем пустой аудио-контекст чтобы "разбудить" систему
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const tempCtx = new AudioContext();
+    await tempCtx.resume();
+    
+    if (pendingRoom) joinRoom(pendingRoom);
 }
 
 async function cleanup() {
-    // 1. Удаляем аудио-элементы
     document.querySelectorAll('audio').forEach(a => a.remove());
-    // 2. Удаляемся из БД
-    if (roomName && myPeerId) {
-        await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
-    }
-    // 3. Закрываем звонки
+    if (roomName && myPeerId) await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
     Object.values(activeCalls).forEach(call => { try { call.close(); } catch(e) {} });
     activeCalls = {};
-    // 4. Гасим микрофон
     if (rawStream) {
         rawStream.getTracks().forEach(t => t.stop());
         rawStream = null;
     }
-    // 5. Убиваем Peer
     if (peerInst) {
         peerInst.destroy();
         peerInst = null;
@@ -135,24 +144,29 @@ async function joinRoom(name) {
     
     try {
         await loadPeerJS();
-        myPeerId = 'user_' + Math.random().toString(36).substring(2, 7) + '_' + Date.now().toString().slice(-3);
+        myPeerId = 'u_' + Math.random().toString(36).substring(2, 6) + '_' + Date.now().toString().slice(-3);
         peerInst = new Peer(myPeerId);
 
         peerInst.on('open', async (id) => {
-            rawStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+            // Настройки микрофона для мобилок
+            rawStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { 
+                    echoCancellation: true, 
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } 
+            });
             
             const myRef = db.ref(`rooms/${roomName}/${id}`);
             myRef.set({ status: 'online', joined: Date.now() });
             myRef.onDisconnect().remove();
 
-            // Слушаем список участников
             db.ref(`rooms/${roomName}`).on('value', (snapshot) => {
                 const data = snapshot.val() || {};
                 participants = Object.keys(data);
                 render(); 
             });
 
-            // Авто-звонок
             db.ref(`rooms/${roomName}`).once('value', (snapshot) => {
                 snapshot.forEach((child) => {
                     const otherId = child.key;
@@ -173,15 +187,12 @@ async function joinRoom(name) {
         });
 
     } catch (err) {
-        console.error(err);
         setS('error');
     }
 }
 
 function handleStream(call) {
     activeCalls[call.peer] = call;
-    
-    // Сразу обновляем UI, чтобы сменить Waiting на Connected
     render();
 
     call.on('stream', (stream) => {
@@ -191,13 +202,13 @@ function handleStream(call) {
             audio.id = 'audio-' + call.peer;
             audio.setAttribute('autoplay', 'true');
             audio.setAttribute('playsinline', 'true');
+            // Убираем дефолтный "телефонный" режим
+            audio.volume = 1.0;
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
-        audio.play().catch(() => {
-            document.getElementById('unmute-btn').style.display = 'block';
-        });
-        render(); // Еще раз для надежности
+        audio.play().catch(e => console.log("Play failed", e));
+        render(); 
     });
 
     call.on('close', () => {
@@ -205,11 +216,6 @@ function handleStream(call) {
         if (audio) audio.remove();
         delete activeCalls[call.peer];
         render(); 
-    });
-    
-    call.on('error', () => {
-        delete activeCalls[call.peer];
-        render();
     });
 }
 
@@ -225,10 +231,12 @@ function render() {
     } else if (STATE === 'connected') {
         const userElements = participants.map(pid => {
             const isMe = pid === myPeerId;
-            const isConnected = isMe || (activeCalls[pid]);
+            const isConnected = isMe || activeCalls[pid];
+            // Чистое имя для списка
+            const cleanName = pid.split('_')[1] || pid;
             return `
                 <div class="user-item ${isMe ? 'me' : ''}">
-                    <span class="user-id">${pid.split('_')[1]} ${isMe ? '(YOU)' : ''}</span>
+                    <span class="user-id">${cleanName} ${isMe ? '(YOU)' : ''}</span>
                     <span class="user-status" style="background: ${isConnected ? 'rgba(126,255,160,0.1)' : 'rgba(255,255,255,0.05)'}; color: ${isConnected ? 'var(--green)' : 'var(--muted)'}">
                         ${isConnected ? 'Connected' : 'Waiting...'}
                     </span>
@@ -251,13 +259,21 @@ function render() {
 
 function promptRoom() {
     const name = prompt("Room name:", "general");
-    if (name) { window.location.hash = name; joinRoom(name); }
+    if (name) {
+        pendingRoom = name;
+        window.location.hash = name;
+        document.getElementById('audio-gate').style.display = 'flex';
+    }
 }
 
 window.onload = () => {
     const hash = window.location.hash.substring(1);
-    if (hash) joinRoom(hash);
-    else render();
+    if (hash) {
+        pendingRoom = hash;
+        document.getElementById('audio-gate').style.display = 'flex';
+    } else {
+        render();
+    }
 };
 </script>
 </body>
