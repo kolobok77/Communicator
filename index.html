@@ -1,241 +1,254 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Communikator - Voice Room</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ORAKUL V5.5 // NETWORK</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --neon-cyan: #00f3ff; --neon-magenta: #ff00ff; --neon-green: #39ff14;
+            --neon-red: #ff3131; --neon-yellow: #fff200; --bg-dark: #050505;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            background-color: var(--bg-dark); color: var(--neon-cyan);
+            font-family: 'Courier New', monospace; margin: 0; padding: 10px;
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            text-transform: uppercase; font-size: 13px;
+        }
+        header {
+            display: flex; justify-content: space-between; border-bottom: 1px solid var(--neon-cyan);
+            padding-bottom: 5px; margin-bottom: 10px; font-size: 9px;
+        }
+        .node {
+            background: rgba(0, 243, 255, 0.05); border: 1px solid var(--neon-cyan);
+            padding: 10px; margin-bottom: 10px; position: relative;
+        }
+        .node-label { font-size: 8px; color: var(--neon-magenta); margin-bottom: 5px; }
+        .big-val { font-size: 1.8rem; font-weight: bold; transition: 0.3s; }
+        
+        .status-fiat { color: var(--neon-yellow) !important; }
+        .status-long { color: var(--neon-green) !important; }
+        .status-short { color: var(--neon-red) !important; }
 
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #0a0a0f; --surf: #12121a; --border: rgba(255,255,255,0.07);
-  --accent: #7efff5; --red: #ff6b6b; --green: #7effa0;
-  --text: #e8e8f0; --muted: rgba(232,232,240,0.4);
-}
-html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
-  font-family: 'DM Mono', monospace; overflow:hidden; touch-action: manipulation; }
+        .net-info { font-size: 8px; color: #555; display: flex; gap: 10px; }
+        .online-dot { color: var(--neon-green); }
 
-.app { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
-.card { width:100%; max-width:440px; padding:0 20px; display:flex; flex-direction:column; align-items:center; }
+        .master-switch {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 5px; border: 1px dashed var(--neon-magenta); margin-top: 5px;
+        }
 
-.logo { font-size:10px; font-weight:700; letter-spacing:0.36em; text-transform:uppercase;
-  color:var(--muted); margin-bottom:40px; display:flex; align-items:center; gap:12px; }
-.logo::before, .logo::after { content:''; width:24px; height:1px; background:var(--border); }
+        #stop-btn {
+            width: 100%; padding: 10px; margin-top: 10px; background: none;
+            border: 1px solid var(--neon-red); color: var(--neon-red);
+            font-family: inherit; font-weight: bold;
+        }
+        #stop-btn.active { background: var(--neon-red); color: black; }
 
-/* ORB UI */
-.orb { position:relative; width:160px; height:160px; margin-bottom:40px;
-  cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; }
-.ring { position:absolute; inset:0; border-radius:50%; border:1px solid rgba(126,255,245,0.14);
-  transition: transform 0.5s; animation: pulse 2s infinite; }
-.ring:nth-child(2) { inset: -10px; opacity: 0.3; animation-delay: 0.5s; }
-
-@keyframes pulse { 0% {transform: scale(1); opacity: 0.4;} 50% {transform: scale(1.08); opacity: 0.7;} 100% {transform: scale(1); opacity: 0.4;} }
-
-.orb-face { position:absolute; inset:0; border-radius:50%;
-  background:radial-gradient(circle at 34% 32%, #1a2828, #0c0c13);
-  border:1px solid rgba(126,255,245,0.18);
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; transition: 0.3s; }
-.orb:hover .orb-face { border-color: var(--accent); box-shadow: 0 0 30px rgba(126,255,245,0.1); }
-
-.orb-ico { width:30px; height:30px; color:var(--accent); filter:drop-shadow(0 0 10px rgba(126,255,245,0.4)); }
-.orb-tag { font-size:9px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
-
-/* CALL UI */
-.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:20px; animation: fadeIn 0.5s ease; }
-.room-badge { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--green); letter-spacing:0.1em; font-weight:700; }
-.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
-
-.user-list { width:100%; max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin: 10px 0; scrollbar-width: none; }
-.user-item { 
-    background: var(--surf); border: 1px solid var(--border); padding: 12px 16px; 
-    border-radius: 12px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;
-}
-.user-id { color: var(--muted); }
-.user-status { font-weight: 700; font-size: 8px; text-transform: uppercase; }
-.user-item.me { border-color: var(--accent); background: rgba(126,255,245,0.03); }
-.user-item.me .user-id { color: var(--accent); }
-
-.hang { width:64px; height:64px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
-  display:flex; align-items:center; justify-content:center; cursor:pointer; transition: 0.2s; margin-top: 10px; }
-.hang:hover { border-color: var(--red); transform: scale(1.1); }
-
-@keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
-</style>
+        #terminal {
+            flex-grow: 1; background: black; border: 1px solid var(--neon-magenta);
+            padding: 8px; overflow-y: auto; font-size: 9px; margin-top: 10px;
+        }
+        .log { margin-bottom: 2px; border-left: 2px solid var(--neon-cyan); padding-left: 5px; }
+    </style>
 </head>
 <body>
-    <div class="app"><div id="root"></div></div>
+
+<header>
+    <div id="net-stat">NETWORK_SYNC: <span class="online-dot">●</span> <span id="online-count">1</span> NODES</div>
+    <div id="sys-clock">00:00:00</div>
+</header>
+
+<div class="node">
+    <div class="node-label">MARKET_PULSE</div>
+    <div id="price" class="big-val" style="color:var(--neon-cyan)">00000.00</div>
+</div>
+
+<div class="node">
+    <div class="node-label">ACCOUNT_SESSION</div>
+    <div id="balance" class="big-val status-fiat">$10,000.00</div>
+    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
+        <span>POS: <span id="pos-type">FLAT</span></span>
+        <span id="pnl-val">0.00%</span>
+    </div>
+</div>
+
+<div class="node">
+    <div class="node-label">CONTROL_UNIT</div>
+    <div style="font-size: 9px; margin-bottom: 5px;">VELOCITY: <span id="spd-lbl">SWING</span></div>
+    <input type="range" id="spd-sld" min="1" max="5" value="3" style="width:100%">
+    
+    <div class="master-switch">
+        <span>MASTER_BRAIN</span>
+        <input type="checkbox" id="master-toggle" checked>
+    </div>
+    
+    <button id="stop-btn">STOP_AI</button>
+</div>
+
+<div id="terminal"></div>
 
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBNku1yfBpM-SR-24S9cTLlfYDr_0uqKSA",
-  databaseURL: "https://communikator-37260-default-rtdb.firebaseio.com",
-  projectId: "communikator-37260",
-};
+    const firebaseConfig = {
+        apiKey: "AIzaSyDA5ol08AMQc3MmZMUYOLD9_P0RQLK9Fn4",
+        authDomain: "bitorakul.firebaseapp.com",
+        databaseURL: "https://bitorakul-default-rtdb.firebaseio.com",
+        projectId: "bitorakul",
+        storageBucket: "bitorakul.firebasestorage.app",
+        messagingSenderId: "664775878094",
+        appId: "1:664775878094:web:6b5314cc9723332ccaf79f"
+    };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-let STATE = 'idle'; 
-let roomName = '';
-let myPeerId = '';
-let peerInst = null;
-let rawStream = null;
-let activeCalls = {};
-let participants = [];
+    let state = { balance: 10000, position: null, prices: [], speed: 3, running: true, isMaster: true };
+    const Profiles = {
+        1: { n: "SCALP", i: 2000, ef: 3, es: 7, r: 7 },
+        2: { n: "INTRADAY", i: 10000, ef: 8, es: 21, r: 14 },
+        3: { n: "SWING", i: 60000, ef: 12, es: 26, r: 14 },
+        4: { n: "TREND", i: 300000, ef: 20, es: 50, r: 21 },
+        5: { n: "HODL", i: 3600000, ef: 50, es: 200, r: 21 }
+    };
 
-const loadPeerJS = () => new Promise(res => {
-    if (window.Peer) return res();
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-    s.onload = res;
-    document.head.appendChild(s);
-});
+    const MathCore = {
+        ema: (d, n) => { let k = 2/(n+1); let e = d[0]; for(let i=1;i<d.length;i++) e = d[i]*k+e*(1-k); return e; },
+        rsi: (d, n) => {
+            if(d.length <= n) return 50;
+            let g=0, l=0; for(let i=d.length-n; i<d.length; i++) { let diff = d[i]-d[i-1]; if(diff>=0) g+=diff; else l-=diff; }
+            return 100-(100/(1+(g/n)/((l/n)||1)));
+        }
+    };
 
-async function cleanup() {
-    if (roomName && myPeerId) await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
-    Object.values(activeCalls).forEach(call => call.close());
-    activeCalls = {};
-    if (rawStream) { rawStream.getTracks().forEach(t => t.stop()); rawStream = null; }
-    if (peerInst) { peerInst.destroy(); peerInst = null; }
-    document.querySelectorAll('audio').forEach(a => a.remove());
-}
-
-function exitApp() {
-    window.location.hash = '';
-    cleanup().then(() => { location.reload(); });
-}
-
-// ОСНОВНОЙ ВХОД (с активацией звука)
-async function startSession() {
-    // Активируем аудио-контекст через жест пользователя
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContext();
-    await audioCtx.resume();
-
-    const hash = window.location.hash.substring(1);
-    if (hash) joinRoom(hash);
-    else {
-        const name = prompt("Enter room name:", "general");
-        if (name) { window.location.hash = name; joinRoom(name); }
+    function log(msg, type='') {
+        const t = document.getElementById('terminal');
+        const d = document.createElement('div'); d.className = `log ${type}`;
+        d.innerHTML = `> ${msg}`; t.prepend(d);
+        if(t.children.length > 25) t.lastChild.remove();
     }
-}
 
-async function joinRoom(name) {
-    roomName = name;
-    setS('joining');
-    await loadPeerJS();
-    
-    // Генерируем уникальный ID для каждой сессии
-    myPeerId = 'u' + Math.random().toString(36).substring(2, 6) + Date.now().toString().slice(-3);
-    peerInst = new Peer(myPeerId);
+    // --- SYNC CORE ---
+    function trade(side, price) {
+        if (!state.isMaster) return; // Только мастер может инициировать сделку
+        if (side === 'LONG' || side === 'SHORT') {
+            state.position = { price, amount: (state.balance || 10000) / price, type: side };
+            state.balance = 0;
+        } else if (side === 'CLOSE') {
+            const p = state.position;
+            if(!p) return;
+            state.balance = (p.type === 'LONG') ? p.amount * price : (p.amount * p.price) + (p.price - price) * p.amount;
+            state.position = null;
+        }
+        db.ref('orakel_v5_network').set({ bal: state.balance, pos: state.position, run: state.running, spd: state.speed });
+    }
 
-    peerInst.on('open', async (id) => {
-        rawStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-        });
+    // Слушаем облако в реальном времени
+    db.ref('orakel_v5_network').on('value', (s) => {
+        const d = s.val();
+        if (!d) return;
+        state.balance = d.bal; state.position = d.pos; state.running = d.run;
         
-        const myRef = db.ref(`rooms/${roomName}/${id}`);
-        myRef.set({ status: 'online' });
-        myRef.onDisconnect().remove();
+        if (state.speed != d.spd) {
+            state.speed = d.spd;
+            document.getElementById('spd-sld').value = d.spd;
+            document.getElementById('spd-lbl').innerText = Profiles[d.spd].n;
+            if(state.isMaster) {
+                clearInterval(window.bT); window.bT = setInterval(brain, Profiles[d.spd].i);
+            }
+        }
 
-        // Слушаем участников
-        db.ref(`rooms/${roomName}`).on('value', (snapshot) => {
-            participants = Object.keys(snapshot.val() || {});
-            render();
-        });
-
-        // Звоним тем, кто уже в комнате
-        db.ref(`rooms/${roomName}`).once('value', (snapshot) => {
-            snapshot.forEach((child) => {
-                if (child.key !== myPeerId) {
-                    handleCall(peerInst.call(child.key, rawStream));
-                }
-            });
-        });
-        setS('connected');
+        const stopBtn = document.getElementById('stop-btn');
+        stopBtn.className = state.running ? '' : 'active';
+        stopBtn.innerText = state.running ? 'STOP_AI' : 'START_AI';
+        
+        const balEl = document.getElementById('balance');
+        balEl.className = 'big-val';
+        if (!state.position) balEl.classList.add('status-fiat');
+        else balEl.classList.add(state.position.type === 'LONG' ? 'status-long' : 'status-short');
+        document.getElementById('pos-type').innerText = state.position ? state.position.type : 'FLAT';
     });
 
-    peerInst.on('call', async (call) => {
-        if (!rawStream) rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        call.answer(rawStream);
-        handleCall(call);
+    // Счетчик присутствия
+    const presenceRef = db.ref('presence').push();
+    presenceRef.onDisconnect().remove();
+    presenceRef.set(true);
+    db.ref('presence').on('value', s => {
+        document.getElementById('online-count').innerText = s.numChildren();
     });
-}
 
-function handleCall(call) {
-    activeCalls[call.peer] = call;
-    call.on('stream', (stream) => {
-        let audio = document.getElementById('audio-' + call.peer) || document.createElement('audio');
-        audio.id = 'audio-' + call.peer;
-        audio.autoplay = true;
-        audio.setAttribute('playsinline', 'true');
-        audio.srcObject = stream;
-        document.body.appendChild(audio);
-        render();
-    });
-    call.on('close', () => {
-        const a = document.getElementById('audio-' + call.peer);
-        if (a) a.remove();
-        delete activeCalls[call.peer];
-        render();
-    });
-}
+    function brain() {
+        if (!state.running || !state.isMaster) return;
+        const p = parseFloat(document.getElementById('price').innerText);
+        if (!p) return;
+        state.prices.push(p); if(state.prices.length > 300) state.prices.shift();
+        const conf = Profiles[state.speed];
+        if(state.prices.length < conf.es) return;
 
-function setS(s) { STATE = s; render(); }
+        const ef = MathCore.ema(state.prices, conf.ef);
+        const es = MathCore.ema(state.prices, conf.es);
+        const threshold = p * 0.0001;
 
-function render() {
-    const root = document.getElementById('root');
-    let html = '';
-
-    if (STATE === 'idle' || STATE === 'joining') {
-        const label = STATE === 'idle' ? 'START' : 'SYNCING...';
-        html = `
-            <div class="orb" onclick="startSession()">
-                <div class="ring"></div><div class="ring"></div>
-                <div class="orb-face">
-                    <svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-                    <span class="orb-tag">${label}</span>
-                </div>
-            </div>`;
-    } else if (STATE === 'connected') {
-        const userList = participants.map(pid => {
-            const isMe = pid === myPeerId;
-            const isLive = isMe || activeCalls[pid];
-            return `
-                <div class="user-item ${isMe ? 'me' : ''}">
-                    <span class="user-id">${pid} ${isMe ? '(YOU)' : ''}</span>
-                    <span class="user-status" style="color: ${isLive ? 'var(--green)' : 'var(--muted)'}">
-                        ${isLive ? '● LIVE' : 'WAITING'}
-                    </span>
-                </div>`;
-        }).join('');
-
-        html = `
-            <div class="call-sec">
-                <div class="room-badge"><div class="bdot"></div>ROOM: ${roomName}</div>
-                <div class="user-list">${userList}</div>
-                <button class="hang" onclick="exitApp()">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--red)"><path d="M23.71 16.67C20.66 13.78 16.54 12 12 12c-4.54 0-8.66 1.78-11.71 4.67-.18.18-.29.43-.29.71 0 .28.11.53.29.71l2.48 2.48c.18.18.43.29.71.29.27 0 .52-.11.7-.28.79-.74 1.69-1.36 2.66-1.85.33-.16.56-.5.56-.9v-3.1c1.45-.47 3-.73 4.6-.73 1.6 0 3.15.26 4.6.72v3.1c0 .4.23.74.56.9.98.49 1.87 1.12 2.66 1.85.18.18.43.28.7.28.28 0 .53-.11.71-.29l2.48-2.48c.18-.18.29-.43.29-.71 0-.28-.11-.53-.29-.71z"/></svg>
-                </button>
-            </div>`;
+        if (!state.position) {
+            if (ef > es + threshold) trade('LONG', p);
+            else if (ef < es - threshold) trade('SHORT', p);
+        } else {
+            if (state.position.type === 'LONG' && ef < es - threshold) { trade('CLOSE', p); trade('SHORT', p); }
+            else if (state.position.type === 'SHORT' && ef > es + threshold) { trade('CLOSE', p); trade('LONG', p); }
+        }
     }
 
-    root.innerHTML = `<div class="card"><div class="logo">COMMUNIKATOR</div>${html}</div>`;
-}
+    // UI Events
+    document.getElementById('stop-btn').onclick = () => {
+        const p = parseFloat(document.getElementById('price').innerText);
+        const nextRunning = !state.running;
+        if (!nextRunning && state.position) {
+             // Мастер или не мастер, при нажатии стоп - закрываем в облаке
+             state.isMaster = true; // Временно берем управление чтобы закрыть
+             trade('CLOSE', p);
+        }
+        db.ref('orakel_v5_network').update({ run: nextRunning });
+    };
 
-// Запуск при загрузке
-window.onload = () => {
-    const hash = window.location.hash.substring(1);
-    if (hash) {
-        // Если зашли по ссылке, просим один раз кликнуть по шару для звука
-        render(); 
-    } else {
-        render();
-    }
-};
+    document.getElementById('master-toggle').onchange = function() {
+        state.isMaster = this.checked;
+        log(state.isMaster ? "NODE: MASTER_ACTIVE" : "NODE: OBSERVER_ONLY", "sys");
+        if(state.isMaster) {
+            const conf = Profiles[state.speed];
+            window.bT = setInterval(brain, conf.interval);
+        } else {
+            clearInterval(window.bT);
+        }
+    };
+
+    document.getElementById('spd-sld').oninput = function() {
+        db.ref('orakel_v5_network').update({ spd: this.value });
+    };
+
+    const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+    ws.onmessage = (e) => {
+        const p = parseFloat(JSON.parse(e.data).c);
+        document.getElementById('price').innerText = p.toFixed(2);
+        if (state.position) {
+            const pos = state.position;
+            const pnl = (pos.type === 'LONG') ? ((p/pos.price-1)*100) : ((pos.price/p-1)*100);
+            document.getElementById('pnl-val').innerText = pnl.toFixed(2) + "%";
+            document.getElementById('pnl-val').style.color = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+            const curBal = (pos.type === 'LONG') ? pos.amount * p : (pos.amount * pos.price) + (pos.price - p) * pos.amount;
+            document.getElementById('balance').innerText = `$${curBal.toFixed(2)}`;
+        } else {
+            document.getElementById('balance').innerText = `$${state.balance.toFixed(2)}`;
+            document.getElementById('pnl-val').innerText = "0.00%";
+        }
+    };
+
+    window.onload = () => {
+        setInterval(() => document.getElementById('sys-clock').innerText = new Date().toLocaleTimeString(), 1000);
+    };
 </script>
 </body>
 </html>
+
