@@ -3,96 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ORAKUL V5.5 // NETWORK</title>
+    <title>ORAKUL V6 // ULTIMATE</title>
+    
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
     <style>
         :root {
-            --neon-cyan: #00f3ff; --neon-magenta: #ff00ff; --neon-green: #39ff14;
-            --neon-red: #ff3131; --neon-yellow: #fff200; --bg-dark: #050505;
+            --neon-cyan: #00f3ff;
+            --neon-magenta: #ff00ff;
+            --neon-green: #39ff14;
+            --neon-red: #ff3131;
+            --neon-yellow: #fff200;
+            --bg-dark: #050505;
+            --panel-bg: rgba(0, 243, 255, 0.05);
         }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+
         body {
-            background-color: var(--bg-dark); color: var(--neon-cyan);
-            font-family: 'Courier New', monospace; margin: 0; padding: 10px;
-            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
-            text-transform: uppercase; font-size: 13px;
+            background-color: var(--bg-dark);
+            color: var(--neon-cyan);
+            font-family: 'Courier New', monospace;
+            margin: 0; padding: 8px;
+            display: flex; flex-direction: column;
+            height: 100vh; overflow: hidden;
+            text-transform: uppercase;
         }
+
+        /* CRT Overlay */
+        body::before {
+            content: " "; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            background-size: 100% 3px; pointer-events: none; z-index: 1000;
+        }
+
         header {
-            display: flex; justify-content: space-between; border-bottom: 1px solid var(--neon-cyan);
-            padding-bottom: 5px; margin-bottom: 10px; font-size: 9px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--neon-cyan);
+            padding-bottom: 5px; margin-bottom: 8px; font-size: 9px;
         }
+
+        .node-container { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
         .node {
-            background: rgba(0, 243, 255, 0.05); border: 1px solid var(--neon-cyan);
-            padding: 10px; margin-bottom: 10px; position: relative;
+            background: var(--panel-bg);
+            border: 1px solid var(--neon-cyan);
+            padding: 10px; position: relative;
+            box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.1);
         }
-        .node-label { font-size: 8px; color: var(--neon-magenta); margin-bottom: 5px; }
-        .big-val { font-size: 1.8rem; font-weight: bold; transition: 0.3s; }
+
+        .node-label { font-size: 8px; color: var(--neon-magenta); margin-bottom: 4px; display: flex; justify-content: space-between; }
         
-        .status-fiat { color: var(--neon-yellow) !important; }
-        .status-long { color: var(--neon-green) !important; }
-        .status-short { color: var(--neon-red) !important; }
+        .big-val { font-size: 1.8rem; font-weight: bold; transition: all 0.2s ease; }
+        
+        .status-fiat { color: var(--neon-yellow) !important; text-shadow: 0 0 10px var(--neon-yellow); }
+        .status-long { color: var(--neon-green) !important; text-shadow: 0 0 10px var(--neon-green); }
+        .status-short { color: var(--neon-red) !important; text-shadow: 0 0 10px var(--neon-red); }
 
-        .net-info { font-size: 8px; color: #555; display: flex; gap: 10px; }
-        .online-dot { color: var(--neon-green); }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
 
-        .master-switch {
+        .btn {
+            background: none; border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan); font-family: inherit;
+            padding: 8px; cursor: pointer; font-weight: bold; font-size: 10px;
+        }
+
+        #stop-btn { border-color: var(--neon-red); color: var(--neon-red); }
+        #stop-btn.active { background: var(--neon-red); color: black; box-shadow: 0 0 15px var(--neon-red); }
+
+        .master-toggle-box {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 5px; border: 1px dashed var(--neon-magenta); margin-top: 5px;
+            font-size: 9px; padding: 5px; border: 1px dashed var(--neon-magenta);
         }
 
-        #stop-btn {
-            width: 100%; padding: 10px; margin-top: 10px; background: none;
-            border: 1px solid var(--neon-red); color: var(--neon-red);
-            font-family: inherit; font-weight: bold;
-        }
-        #stop-btn.active { background: var(--neon-red); color: black; }
+        input[type=range] { width: 100%; accent-color: var(--neon-magenta); margin: 5px 0; }
 
         #terminal {
-            flex-grow: 1; background: black; border: 1px solid var(--neon-magenta);
-            padding: 8px; overflow-y: auto; font-size: 9px; margin-top: 10px;
+            flex-grow: 1; margin-top: 8px;
+            background: rgba(0,0,0,0.95);
+            border: 1px solid var(--neon-magenta);
+            padding: 8px; overflow-y: auto;
+            font-size: 9px; line-height: 1.2;
+            box-shadow: inset 0 0 10px rgba(255, 0, 255, 0.1);
         }
+
         .log { margin-bottom: 2px; border-left: 2px solid var(--neon-cyan); padding-left: 5px; }
+        .buy { color: var(--neon-green); border-color: var(--neon-green); }
+        .sell { color: var(--neon-red); border-color: var(--neon-red); }
+        .sys { color: #888; }
+
+        .indicator-box { display: flex; gap: 4px; margin-top: 4px; }
+        .chip { font-size: 7px; border: 1px solid #333; padding: 1px 3px; }
+        .chip.active { border-color: var(--neon-green); color: var(--neon-green); }
+
+        #online-count { color: var(--neon-green); font-weight: bold; }
     </style>
 </head>
 <body>
 
 <header>
-    <div id="net-stat">NETWORK_SYNC: <span class="online-dot">●</span> <span id="online-count">1</span> NODES</div>
+    <div>NET: <span id="online-count">1</span> NODES // <span id="net-status">OFFLINE</span></div>
     <div id="sys-clock">00:00:00</div>
 </header>
 
-<div class="node">
-    <div class="node-label">MARKET_PULSE</div>
-    <div id="price" class="big-val" style="color:var(--neon-cyan)">00000.00</div>
-</div>
-
-<div class="node">
-    <div class="node-label">ACCOUNT_SESSION</div>
-    <div id="balance" class="big-val status-fiat">$10,000.00</div>
-    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
-        <span>POS: <span id="pos-type">FLAT</span></span>
-        <span id="pnl-val">0.00%</span>
+<div class="node-container">
+    <div class="node">
+        <div class="node-label">
+            <span>MARKET_PULSE: BTC/USDT</span>
+            <span id="last-tick-time">--:--:--</span>
+        </div>
+        <div id="price" class="big-val">00000.00</div>
+        <div class="indicator-box">
+            <div id="ind-ema" class="chip">EMA_CROSS</div>
+            <div id="ind-rsi" class="chip">RSI_MOMENTUM</div>
+        </div>
     </div>
-</div>
 
-<div class="node">
-    <div class="node-label">CONTROL_UNIT</div>
-    <div style="font-size: 9px; margin-bottom: 5px;">VELOCITY: <span id="spd-lbl">SWING</span></div>
-    <input type="range" id="spd-sld" min="1" max="5" value="3" style="width:100%">
-    
-    <div class="master-switch">
-        <span>MASTER_BRAIN</span>
-        <input type="checkbox" id="master-toggle" checked>
+    <div class="node">
+        <div class="node-label">LEDGER_SYNC: FIREBASE</div>
+        <div id="balance" class="big-val status-fiat">$10,000.00</div>
+        <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
+            <span>POS: <span id="pos-type">FLAT</span></span>
+            <span id="pnl-val">0.00%</span>
+        </div>
     </div>
-    
-    <button id="stop-btn">STOP_AI</button>
+
+    <div class="node">
+        <div class="node-label">NEURAL_CONFIG</div>
+        <div style="font-size: 8px;">VELOCITY: <span id="spd-lbl" style="color:var(--neon-magenta)">SWING</span></div>
+        <input type="range" id="spd-sld" min="1" max="5" value="3">
+        
+        <div class="controls">
+            <div class="master-toggle-box">
+                <span>MASTER</span>
+                <input type="checkbox" id="master-toggle" checked>
+            </div>
+            <button id="stop-btn" class="btn">STOP_AI</button>
+        </div>
+    </div>
 </div>
 
 <div id="terminal"></div>
 
 <script>
+    // --- FIREBASE CONFIG ---
     const firebaseConfig = {
         apiKey: "AIzaSyDA5ol08AMQc3MmZMUYOLD9_P0RQLK9Fn4",
         authDomain: "bitorakul.firebaseapp.com",
@@ -106,7 +161,17 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let state = { balance: 10000, position: null, prices: [], speed: 3, running: true, isMaster: true };
+    // --- STATE ---
+    let state = {
+        balance: 10000,
+        position: null,
+        prices: [],
+        speed: 3,
+        running: true,
+        isMaster: true,
+        lastUpdate: Date.now()
+    };
+
     const Profiles = {
         1: { n: "SCALP", i: 2000, ef: 3, es: 7, r: 7 },
         2: { n: "INTRADAY", i: 10000, ef: 8, es: 21, r: 14 },
@@ -115,6 +180,20 @@
         5: { n: "HODL", i: 3600000, ef: 50, es: 200, r: 21 }
     };
 
+    // --- SOUND ENGINE ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(freq = 440, duration = 0.1) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // --- MATH CORE ---
     const MathCore = {
         ema: (d, n) => { let k = 2/(n+1); let e = d[0]; for(let i=1;i<d.length;i++) e = d[i]*k+e*(1-k); return e; },
         rsi: (d, n) => {
@@ -126,71 +205,51 @@
 
     function log(msg, type='') {
         const t = document.getElementById('terminal');
-        const d = document.createElement('div'); d.className = `log ${type}`;
-        d.innerHTML = `> ${msg}`; t.prepend(d);
+        const d = document.createElement('div');
+        d.className = `log ${type}`;
+        d.innerHTML = `[${new Date().toLocaleTimeString([], {hour12:false})}] > ${msg}`;
+        t.prepend(d);
         if(t.children.length > 25) t.lastChild.remove();
     }
 
-    // --- SYNC CORE ---
+    // --- TRADING ENGINE ---
     function trade(side, price) {
-        if (!state.isMaster) return; // Только мастер может инициировать сделку
+        if (!state.isMaster) return;
         if (side === 'LONG' || side === 'SHORT') {
             state.position = { price, amount: (state.balance || 10000) / price, type: side };
             state.balance = 0;
+            log(`EXECUTE_${side} @ ${price.toFixed(2)}`, side.toLowerCase());
+            beep(880, 0.2);
         } else if (side === 'CLOSE') {
+            if(!state.position) return;
             const p = state.position;
-            if(!p) return;
             state.balance = (p.type === 'LONG') ? p.amount * price : (p.amount * p.price) + (p.price - price) * p.amount;
+            log(`CLOSED_${p.type} | NEW_BAL: $${state.balance.toFixed(2)}`, 'sys');
             state.position = null;
+            beep(440, 0.2);
         }
-        db.ref('orakel_v5_network').set({ bal: state.balance, pos: state.position, run: state.running, spd: state.speed });
+        db.ref('orakel_v6_final').set({ bal: state.balance, pos: state.position, run: state.running, spd: state.speed, time: Date.now() });
     }
-
-    // Слушаем облако в реальном времени
-    db.ref('orakel_v5_network').on('value', (s) => {
-        const d = s.val();
-        if (!d) return;
-        state.balance = d.bal; state.position = d.pos; state.running = d.run;
-        
-        if (state.speed != d.spd) {
-            state.speed = d.spd;
-            document.getElementById('spd-sld').value = d.spd;
-            document.getElementById('spd-lbl').innerText = Profiles[d.spd].n;
-            if(state.isMaster) {
-                clearInterval(window.bT); window.bT = setInterval(brain, Profiles[d.spd].i);
-            }
-        }
-
-        const stopBtn = document.getElementById('stop-btn');
-        stopBtn.className = state.running ? '' : 'active';
-        stopBtn.innerText = state.running ? 'STOP_AI' : 'START_AI';
-        
-        const balEl = document.getElementById('balance');
-        balEl.className = 'big-val';
-        if (!state.position) balEl.classList.add('status-fiat');
-        else balEl.classList.add(state.position.type === 'LONG' ? 'status-long' : 'status-short');
-        document.getElementById('pos-type').innerText = state.position ? state.position.type : 'FLAT';
-    });
-
-    // Счетчик присутствия
-    const presenceRef = db.ref('presence').push();
-    presenceRef.onDisconnect().remove();
-    presenceRef.set(true);
-    db.ref('presence').on('value', s => {
-        document.getElementById('online-count').innerText = s.numChildren();
-    });
 
     function brain() {
         if (!state.running || !state.isMaster) return;
         const p = parseFloat(document.getElementById('price').innerText);
-        if (!p) return;
-        state.prices.push(p); if(state.prices.length > 300) state.prices.shift();
+        if (!p || isNaN(p)) return;
+        
+        state.prices.push(p); 
+        if(state.prices.length > 300) state.prices.shift();
+        
         const conf = Profiles[state.speed];
         if(state.prices.length < conf.es) return;
 
         const ef = MathCore.ema(state.prices, conf.ef);
         const es = MathCore.ema(state.prices, conf.es);
-        const threshold = p * 0.0001;
+        const r = MathCore.rsi(state.prices, conf.r);
+        
+        document.getElementById('ind-ema').className = `chip ${ef > es ? 'active' : ''}`;
+        document.getElementById('ind-rsi').className = `chip ${r > 50 ? 'active' : ''}`;
+
+        const threshold = p * 0.0001; // 0.01% Hysteresis
 
         if (!state.position) {
             if (ef > es + threshold) trade('LONG', p);
@@ -201,54 +260,110 @@
         }
     }
 
-    // UI Events
+    // --- NETWORK MODULE ---
+    function initNetwork() {
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+        const statusEl = document.getElementById('net-status');
+
+        ws.onopen = () => {
+            statusEl.innerText = "ONLINE"; statusEl.style.color = "var(--neon-green)";
+            log("BINANCE_LINK: STABLE", "sys");
+        };
+
+        ws.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+            const p = parseFloat(d.c);
+            state.lastUpdate = Date.now();
+            
+            document.getElementById('price').innerText = p.toFixed(2);
+            document.getElementById('last-tick-time').innerText = new Date().toLocaleTimeString([], {hour12:false});
+            
+            if (state.position) {
+                const pos = state.position;
+                const pnl = (pos.type === 'LONG') ? ((p/pos.price-1)*100) : ((pos.price/p-1)*100);
+                document.getElementById('pnl-val').innerText = pnl.toFixed(2) + "%";
+                document.getElementById('pnl-val').style.color = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+                const curBal = (pos.type === 'LONG') ? pos.amount * p : (pos.amount * pos.price) + (pos.price - p) * pos.amount;
+                document.getElementById('balance').innerText = `$${curBal.toFixed(2)}`;
+            } else {
+                document.getElementById('balance').innerText = `$${state.balance.toFixed(2)}`;
+                document.getElementById('pnl-val').innerText = "0.00%";
+            }
+        };
+
+        ws.onclose = () => {
+            statusEl.innerText = "LOST"; statusEl.style.color = "var(--neon-red)";
+            log("NETWORK_CRITICAL: RECONNECTING...", "sell");
+            setTimeout(initNetwork, 3000);
+        };
+    }
+
+    // --- WATCHDOG (Connection Alert) ---
+    setInterval(() => {
+        if (Date.now() - state.lastUpdate > 10000 && state.running) {
+            beep(220, 0.5); // Низкий звук тревоги
+            log("WATCHDOG_ALERT: NO_DATA_FLOW", "sell");
+        }
+    }, 10000);
+
+    // --- FIREBASE SYNC ---
+    db.ref('orakel_v6_final').on('value', (s) => {
+        const d = s.val();
+        if (!d) return;
+        state.balance = d.bal; state.position = d.pos; state.running = d.run;
+        
+        if (state.speed != d.spd) {
+            state.speed = d.spd;
+            document.getElementById('spd-sld').value = d.spd;
+            document.getElementById('spd-lbl').innerText = Profiles[d.spd].n;
+            if(state.isMaster) { clearInterval(window.bT); window.bT = setInterval(brain, Profiles[d.spd].i); }
+        }
+
+        const btn = document.getElementById('stop-btn');
+        btn.className = state.running ? 'btn' : 'btn active';
+        btn.innerText = state.running ? 'STOP_AI' : 'START_AI';
+        
+        const balEl = document.getElementById('balance');
+        balEl.className = 'big-val';
+        if (!state.position) balEl.classList.add('status-fiat');
+        else balEl.classList.add(state.position.type === 'LONG' ? 'status-long' : 'status-short');
+        document.getElementById('pos-type').innerText = state.position ? state.position.type : 'FLAT';
+    });
+
+    // Presence Counter
+    const pRef = db.ref('presence').push();
+    pRef.onDisconnect().remove(); pRef.set(true);
+    db.ref('presence').on('value', s => document.getElementById('online-count').innerText = s.numChildren());
+
+    // --- UI EVENTS ---
     document.getElementById('stop-btn').onclick = () => {
         const p = parseFloat(document.getElementById('price').innerText);
-        const nextRunning = !state.running;
-        if (!nextRunning && state.position) {
-             // Мастер или не мастер, при нажатии стоп - закрываем в облаке
-             state.isMaster = true; // Временно берем управление чтобы закрыть
-             trade('CLOSE', p);
-        }
-        db.ref('orakel_v5_network').update({ run: nextRunning });
+        if (state.running && state.position) { trade('CLOSE', p); }
+        db.ref('orakel_v6_final').update({ run: !state.running });
+        beep(660, 0.1);
     };
 
     document.getElementById('master-toggle').onchange = function() {
         state.isMaster = this.checked;
-        log(state.isMaster ? "NODE: MASTER_ACTIVE" : "NODE: OBSERVER_ONLY", "sys");
-        if(state.isMaster) {
-            const conf = Profiles[state.speed];
-            window.bT = setInterval(brain, conf.interval);
-        } else {
-            clearInterval(window.bT);
-        }
+        log(state.isMaster ? "CORE_STATE: MASTER_NODE" : "CORE_STATE: OBSERVER", "sys");
+        if(state.isMaster) { window.bT = setInterval(brain, Profiles[state.speed].i); }
+        else { clearInterval(window.bT); }
     };
 
     document.getElementById('spd-sld').oninput = function() {
-        db.ref('orakel_v5_network').update({ spd: this.value });
+        db.ref('orakel_v6_final').update({ spd: this.value });
     };
 
-    const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
-    ws.onmessage = (e) => {
-        const p = parseFloat(JSON.parse(e.data).c);
-        document.getElementById('price').innerText = p.toFixed(2);
-        if (state.position) {
-            const pos = state.position;
-            const pnl = (pos.type === 'LONG') ? ((p/pos.price-1)*100) : ((pos.price/p-1)*100);
-            document.getElementById('pnl-val').innerText = pnl.toFixed(2) + "%";
-            document.getElementById('pnl-val').style.color = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
-            const curBal = (pos.type === 'LONG') ? pos.amount * p : (pos.amount * pos.price) + (pos.price - p) * pos.amount;
-            document.getElementById('balance').innerText = `$${curBal.toFixed(2)}`;
-        } else {
-            document.getElementById('balance').innerText = `$${state.balance.toFixed(2)}`;
-            document.getElementById('pnl-val').innerText = "0.00%";
-        }
-    };
-
+    // --- INIT ---
     window.onload = () => {
-        setInterval(() => document.getElementById('sys-clock').innerText = new Date().toLocaleTimeString(), 1000);
+        if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+        initNetwork();
+        setInterval(() => document.getElementById('sys-clock').innerText = new Date().toLocaleTimeString([], {hour12:false}), 1000);
+        log("BIT_ORAKUL_V6_READY // WAITING_FOR_SYNC", "sys");
     };
+
 </script>
+
 </body>
 </html>
 
