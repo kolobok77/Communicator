@@ -1,368 +1,241 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ORAKUL V6 // ULTIMATE</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Communikator - Voice Room</title>
 
-    <style>
-        :root {
-            --neon-cyan: #00f3ff;
-            --neon-magenta: #ff00ff;
-            --neon-green: #39ff14;
-            --neon-red: #ff3131;
-            --neon-yellow: #fff200;
-            --bg-dark: #050505;
-            --panel-bg: rgba(0, 243, 255, 0.05);
-        }
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f; --surf: #12121a; --border: rgba(255,255,255,0.07);
+  --accent: #7efff5; --red: #ff6b6b; --green: #7effa0;
+  --text: #e8e8f0; --muted: rgba(232,232,240,0.4);
+}
+html, body { width:100%; height:100%; background:var(--bg); color:var(--text);
+  font-family: 'DM Mono', monospace; overflow:hidden; touch-action: manipulation; }
 
-        body {
-            background-color: var(--bg-dark);
-            color: var(--neon-cyan);
-            font-family: 'Courier New', monospace;
-            margin: 0; padding: 8px;
-            display: flex; flex-direction: column;
-            height: 100vh; overflow: hidden;
-            text-transform: uppercase;
-        }
+.app { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+.card { width:100%; max-width:440px; padding:0 20px; display:flex; flex-direction:column; align-items:center; }
 
-        /* CRT Overlay */
-        body::before {
-            content: " "; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
-            background-size: 100% 3px; pointer-events: none; z-index: 1000;
-        }
+.logo { font-size:10px; font-weight:700; letter-spacing:0.36em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:40px; display:flex; align-items:center; gap:12px; }
+.logo::before, .logo::after { content:''; width:24px; height:1px; background:var(--border); }
 
-        header {
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--neon-cyan);
-            padding-bottom: 5px; margin-bottom: 8px; font-size: 9px;
-        }
+/* ORB UI */
+.orb { position:relative; width:160px; height:160px; margin-bottom:40px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; }
+.ring { position:absolute; inset:0; border-radius:50%; border:1px solid rgba(126,255,245,0.14);
+  transition: transform 0.5s; animation: pulse 2s infinite; }
+.ring:nth-child(2) { inset: -10px; opacity: 0.3; animation-delay: 0.5s; }
 
-        .node-container { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+@keyframes pulse { 0% {transform: scale(1); opacity: 0.4;} 50% {transform: scale(1.08); opacity: 0.7;} 100% {transform: scale(1); opacity: 0.4;} }
 
-        .node {
-            background: var(--panel-bg);
-            border: 1px solid var(--neon-cyan);
-            padding: 10px; position: relative;
-            box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.1);
-        }
+.orb-face { position:absolute; inset:0; border-radius:50%;
+  background:radial-gradient(circle at 34% 32%, #1a2828, #0c0c13);
+  border:1px solid rgba(126,255,245,0.18);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; transition: 0.3s; }
+.orb:hover .orb-face { border-color: var(--accent); box-shadow: 0 0 30px rgba(126,255,245,0.1); }
 
-        .node-label { font-size: 8px; color: var(--neon-magenta); margin-bottom: 4px; display: flex; justify-content: space-between; }
-        
-        .big-val { font-size: 1.8rem; font-weight: bold; transition: all 0.2s ease; }
-        
-        .status-fiat { color: var(--neon-yellow) !important; text-shadow: 0 0 10px var(--neon-yellow); }
-        .status-long { color: var(--neon-green) !important; text-shadow: 0 0 10px var(--neon-green); }
-        .status-short { color: var(--neon-red) !important; text-shadow: 0 0 10px var(--neon-red); }
+.orb-ico { width:30px; height:30px; color:var(--accent); filter:drop-shadow(0 0 10px rgba(126,255,245,0.4)); }
+.orb-tag { font-size:9px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
 
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
+/* CALL UI */
+.call-sec { width:100%; display:flex; flex-direction:column; align-items:center; gap:20px; animation: fadeIn 0.5s ease; }
+.room-badge { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--green); letter-spacing:0.1em; font-weight:700; }
+.bdot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); }
 
-        .btn {
-            background: none; border: 1px solid var(--neon-cyan);
-            color: var(--neon-cyan); font-family: inherit;
-            padding: 8px; cursor: pointer; font-weight: bold; font-size: 10px;
-        }
+.user-list { width:100%; max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin: 10px 0; scrollbar-width: none; }
+.user-item { 
+    background: var(--surf); border: 1px solid var(--border); padding: 12px 16px; 
+    border-radius: 12px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;
+}
+.user-id { color: var(--muted); }
+.user-status { font-weight: 700; font-size: 8px; text-transform: uppercase; }
+.user-item.me { border-color: var(--accent); background: rgba(126,255,245,0.03); }
+.user-item.me .user-id { color: var(--accent); }
 
-        #stop-btn { border-color: var(--neon-red); color: var(--neon-red); }
-        #stop-btn.active { background: var(--neon-red); color: black; box-shadow: 0 0 15px var(--neon-red); }
+.hang { width:64px; height:64px; border-radius:50%; background: #190909; border:1px solid rgba(255,107,107,0.2);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; transition: 0.2s; margin-top: 10px; }
+.hang:hover { border-color: var(--red); transform: scale(1.1); }
 
-        .master-toggle-box {
-            display: flex; align-items: center; justify-content: space-between;
-            font-size: 9px; padding: 5px; border: 1px dashed var(--neon-magenta);
-        }
-
-        input[type=range] { width: 100%; accent-color: var(--neon-magenta); margin: 5px 0; }
-
-        #terminal {
-            flex-grow: 1; margin-top: 8px;
-            background: rgba(0,0,0,0.95);
-            border: 1px solid var(--neon-magenta);
-            padding: 8px; overflow-y: auto;
-            font-size: 9px; line-height: 1.2;
-            box-shadow: inset 0 0 10px rgba(255, 0, 255, 0.1);
-        }
-
-        .log { margin-bottom: 2px; border-left: 2px solid var(--neon-cyan); padding-left: 5px; }
-        .buy { color: var(--neon-green); border-color: var(--neon-green); }
-        .sell { color: var(--neon-red); border-color: var(--neon-red); }
-        .sys { color: #888; }
-
-        .indicator-box { display: flex; gap: 4px; margin-top: 4px; }
-        .chip { font-size: 7px; border: 1px solid #333; padding: 1px 3px; }
-        .chip.active { border-color: var(--neon-green); color: var(--neon-green); }
-
-        #online-count { color: var(--neon-green); font-weight: bold; }
-    </style>
+@keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+</style>
 </head>
 <body>
-
-<header>
-    <div>NET: <span id="online-count">1</span> NODES // <span id="net-status">OFFLINE</span></div>
-    <div id="sys-clock">00:00:00</div>
-</header>
-
-<div class="node-container">
-    <div class="node">
-        <div class="node-label">
-            <span>MARKET_PULSE: BTC/USDT</span>
-            <span id="last-tick-time">--:--:--</span>
-        </div>
-        <div id="price" class="big-val">00000.00</div>
-        <div class="indicator-box">
-            <div id="ind-ema" class="chip">EMA_CROSS</div>
-            <div id="ind-rsi" class="chip">RSI_MOMENTUM</div>
-        </div>
-    </div>
-
-    <div class="node">
-        <div class="node-label">LEDGER_SYNC: FIREBASE</div>
-        <div id="balance" class="big-val status-fiat">$10,000.00</div>
-        <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
-            <span>POS: <span id="pos-type">FLAT</span></span>
-            <span id="pnl-val">0.00%</span>
-        </div>
-    </div>
-
-    <div class="node">
-        <div class="node-label">NEURAL_CONFIG</div>
-        <div style="font-size: 8px;">VELOCITY: <span id="spd-lbl" style="color:var(--neon-magenta)">SWING</span></div>
-        <input type="range" id="spd-sld" min="1" max="5" value="3">
-        
-        <div class="controls">
-            <div class="master-toggle-box">
-                <span>MASTER</span>
-                <input type="checkbox" id="master-toggle" checked>
-            </div>
-            <button id="stop-btn" class="btn">STOP_AI</button>
-        </div>
-    </div>
-</div>
-
-<div id="terminal"></div>
+    <div class="app"><div id="root"></div></div>
 
 <script>
-    // --- FIREBASE CONFIG ---
-    const firebaseConfig = {
-        apiKey: "AIzaSyDA5ol08AMQc3MmZMUYOLD9_P0RQLK9Fn4",
-        authDomain: "bitorakul.firebaseapp.com",
-        databaseURL: "https://bitorakul-default-rtdb.firebaseio.com",
-        projectId: "bitorakul",
-        storageBucket: "bitorakul.firebasestorage.app",
-        messagingSenderId: "664775878094",
-        appId: "1:664775878094:web:6b5314cc9723332ccaf79f"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyBNku1yfBpM-SR-24S9cTLlfYDr_0uqKSA",
+  databaseURL: "https://communikator-37260-default-rtdb.firebaseio.com",
+  projectId: "communikator-37260",
+};
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-    // --- STATE ---
-    let state = {
-        balance: 10000,
-        position: null,
-        prices: [],
-        speed: 3,
-        running: true,
-        isMaster: true,
-        lastUpdate: Date.now()
-    };
+let STATE = 'idle'; 
+let roomName = '';
+let myPeerId = '';
+let peerInst = null;
+let rawStream = null;
+let activeCalls = {};
+let participants = [];
 
-    const Profiles = {
-        1: { n: "SCALP", i: 2000, ef: 3, es: 7, r: 7 },
-        2: { n: "INTRADAY", i: 10000, ef: 8, es: 21, r: 14 },
-        3: { n: "SWING", i: 60000, ef: 12, es: 26, r: 14 },
-        4: { n: "TREND", i: 300000, ef: 20, es: 50, r: 21 },
-        5: { n: "HODL", i: 3600000, ef: 50, es: 200, r: 21 }
-    };
+const loadPeerJS = () => new Promise(res => {
+    if (window.Peer) return res();
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload = res;
+    document.head.appendChild(s);
+});
 
-    // --- SOUND ENGINE ---
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    function beep(freq = 440, duration = 0.1) {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
+async function cleanup() {
+    if (roomName && myPeerId) await db.ref(`rooms/${roomName}/${myPeerId}`).remove();
+    Object.values(activeCalls).forEach(call => call.close());
+    activeCalls = {};
+    if (rawStream) { rawStream.getTracks().forEach(t => t.stop()); rawStream = null; }
+    if (peerInst) { peerInst.destroy(); peerInst = null; }
+    document.querySelectorAll('audio').forEach(a => a.remove());
+}
+
+function exitApp() {
+    window.location.hash = '';
+    cleanup().then(() => { location.reload(); });
+}
+
+// ОСНОВНОЙ ВХОД (с активацией звука)
+async function startSession() {
+    // Активируем аудио-контекст через жест пользователя
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    await audioCtx.resume();
+
+    const hash = window.location.hash.substring(1);
+    if (hash) joinRoom(hash);
+    else {
+        const name = prompt("Enter room name:", "general");
+        if (name) { window.location.hash = name; joinRoom(name); }
     }
+}
 
-    // --- MATH CORE ---
-    const MathCore = {
-        ema: (d, n) => { let k = 2/(n+1); let e = d[0]; for(let i=1;i<d.length;i++) e = d[i]*k+e*(1-k); return e; },
-        rsi: (d, n) => {
-            if(d.length <= n) return 50;
-            let g=0, l=0; for(let i=d.length-n; i<d.length; i++) { let diff = d[i]-d[i-1]; if(diff>=0) g+=diff; else l-=diff; }
-            return 100-(100/(1+(g/n)/((l/n)||1)));
-        }
-    };
+async function joinRoom(name) {
+    roomName = name;
+    setS('joining');
+    await loadPeerJS();
+    
+    // Генерируем уникальный ID для каждой сессии
+    myPeerId = 'u' + Math.random().toString(36).substring(2, 6) + Date.now().toString().slice(-3);
+    peerInst = new Peer(myPeerId);
 
-    function log(msg, type='') {
-        const t = document.getElementById('terminal');
-        const d = document.createElement('div');
-        d.className = `log ${type}`;
-        d.innerHTML = `[${new Date().toLocaleTimeString([], {hour12:false})}] > ${msg}`;
-        t.prepend(d);
-        if(t.children.length > 25) t.lastChild.remove();
-    }
-
-    // --- TRADING ENGINE ---
-    function trade(side, price) {
-        if (!state.isMaster) return;
-        if (side === 'LONG' || side === 'SHORT') {
-            state.position = { price, amount: (state.balance || 10000) / price, type: side };
-            state.balance = 0;
-            log(`EXECUTE_${side} @ ${price.toFixed(2)}`, side.toLowerCase());
-            beep(880, 0.2);
-        } else if (side === 'CLOSE') {
-            if(!state.position) return;
-            const p = state.position;
-            state.balance = (p.type === 'LONG') ? p.amount * price : (p.amount * p.price) + (p.price - price) * p.amount;
-            log(`CLOSED_${p.type} | NEW_BAL: $${state.balance.toFixed(2)}`, 'sys');
-            state.position = null;
-            beep(440, 0.2);
-        }
-        db.ref('orakel_v6_final').set({ bal: state.balance, pos: state.position, run: state.running, spd: state.speed, time: Date.now() });
-    }
-
-    function brain() {
-        if (!state.running || !state.isMaster) return;
-        const p = parseFloat(document.getElementById('price').innerText);
-        if (!p || isNaN(p)) return;
+    peerInst.on('open', async (id) => {
+        rawStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+        });
         
-        state.prices.push(p); 
-        if(state.prices.length > 300) state.prices.shift();
-        
-        const conf = Profiles[state.speed];
-        if(state.prices.length < conf.es) return;
+        const myRef = db.ref(`rooms/${roomName}/${id}`);
+        myRef.set({ status: 'online' });
+        myRef.onDisconnect().remove();
 
-        const ef = MathCore.ema(state.prices, conf.ef);
-        const es = MathCore.ema(state.prices, conf.es);
-        const r = MathCore.rsi(state.prices, conf.r);
-        
-        document.getElementById('ind-ema').className = `chip ${ef > es ? 'active' : ''}`;
-        document.getElementById('ind-rsi').className = `chip ${r > 50 ? 'active' : ''}`;
+        // Слушаем участников
+        db.ref(`rooms/${roomName}`).on('value', (snapshot) => {
+            participants = Object.keys(snapshot.val() || {});
+            render();
+        });
 
-        const threshold = p * 0.0001; // 0.01% Hysteresis
-
-        if (!state.position) {
-            if (ef > es + threshold) trade('LONG', p);
-            else if (ef < es - threshold) trade('SHORT', p);
-        } else {
-            if (state.position.type === 'LONG' && ef < es - threshold) { trade('CLOSE', p); trade('SHORT', p); }
-            else if (state.position.type === 'SHORT' && ef > es + threshold) { trade('CLOSE', p); trade('LONG', p); }
-        }
-    }
-
-    // --- NETWORK MODULE ---
-    function initNetwork() {
-        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
-        const statusEl = document.getElementById('net-status');
-
-        ws.onopen = () => {
-            statusEl.innerText = "ONLINE"; statusEl.style.color = "var(--neon-green)";
-            log("BINANCE_LINK: STABLE", "sys");
-        };
-
-        ws.onmessage = (e) => {
-            const d = JSON.parse(e.data);
-            const p = parseFloat(d.c);
-            state.lastUpdate = Date.now();
-            
-            document.getElementById('price').innerText = p.toFixed(2);
-            document.getElementById('last-tick-time').innerText = new Date().toLocaleTimeString([], {hour12:false});
-            
-            if (state.position) {
-                const pos = state.position;
-                const pnl = (pos.type === 'LONG') ? ((p/pos.price-1)*100) : ((pos.price/p-1)*100);
-                document.getElementById('pnl-val').innerText = pnl.toFixed(2) + "%";
-                document.getElementById('pnl-val').style.color = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
-                const curBal = (pos.type === 'LONG') ? pos.amount * p : (pos.amount * pos.price) + (pos.price - p) * pos.amount;
-                document.getElementById('balance').innerText = `$${curBal.toFixed(2)}`;
-            } else {
-                document.getElementById('balance').innerText = `$${state.balance.toFixed(2)}`;
-                document.getElementById('pnl-val').innerText = "0.00%";
-            }
-        };
-
-        ws.onclose = () => {
-            statusEl.innerText = "LOST"; statusEl.style.color = "var(--neon-red)";
-            log("NETWORK_CRITICAL: RECONNECTING...", "sell");
-            setTimeout(initNetwork, 3000);
-        };
-    }
-
-    // --- WATCHDOG (Connection Alert) ---
-    setInterval(() => {
-        if (Date.now() - state.lastUpdate > 10000 && state.running) {
-            beep(220, 0.5); // Низкий звук тревоги
-            log("WATCHDOG_ALERT: NO_DATA_FLOW", "sell");
-        }
-    }, 10000);
-
-    // --- FIREBASE SYNC ---
-    db.ref('orakel_v6_final').on('value', (s) => {
-        const d = s.val();
-        if (!d) return;
-        state.balance = d.bal; state.position = d.pos; state.running = d.run;
-        
-        if (state.speed != d.spd) {
-            state.speed = d.spd;
-            document.getElementById('spd-sld').value = d.spd;
-            document.getElementById('spd-lbl').innerText = Profiles[d.spd].n;
-            if(state.isMaster) { clearInterval(window.bT); window.bT = setInterval(brain, Profiles[d.spd].i); }
-        }
-
-        const btn = document.getElementById('stop-btn');
-        btn.className = state.running ? 'btn' : 'btn active';
-        btn.innerText = state.running ? 'STOP_AI' : 'START_AI';
-        
-        const balEl = document.getElementById('balance');
-        balEl.className = 'big-val';
-        if (!state.position) balEl.classList.add('status-fiat');
-        else balEl.classList.add(state.position.type === 'LONG' ? 'status-long' : 'status-short');
-        document.getElementById('pos-type').innerText = state.position ? state.position.type : 'FLAT';
+        // Звоним тем, кто уже в комнате
+        db.ref(`rooms/${roomName}`).once('value', (snapshot) => {
+            snapshot.forEach((child) => {
+                if (child.key !== myPeerId) {
+                    handleCall(peerInst.call(child.key, rawStream));
+                }
+            });
+        });
+        setS('connected');
     });
 
-    // Presence Counter
-    const pRef = db.ref('presence').push();
-    pRef.onDisconnect().remove(); pRef.set(true);
-    db.ref('presence').on('value', s => document.getElementById('online-count').innerText = s.numChildren());
+    peerInst.on('call', async (call) => {
+        if (!rawStream) rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        call.answer(rawStream);
+        handleCall(call);
+    });
+}
 
-    // --- UI EVENTS ---
-    document.getElementById('stop-btn').onclick = () => {
-        const p = parseFloat(document.getElementById('price').innerText);
-        if (state.running && state.position) { trade('CLOSE', p); }
-        db.ref('orakel_v6_final').update({ run: !state.running });
-        beep(660, 0.1);
-    };
+function handleCall(call) {
+    activeCalls[call.peer] = call;
+    call.on('stream', (stream) => {
+        let audio = document.getElementById('audio-' + call.peer) || document.createElement('audio');
+        audio.id = 'audio-' + call.peer;
+        audio.autoplay = true;
+        audio.setAttribute('playsinline', 'true');
+        audio.srcObject = stream;
+        document.body.appendChild(audio);
+        render();
+    });
+    call.on('close', () => {
+        const a = document.getElementById('audio-' + call.peer);
+        if (a) a.remove();
+        delete activeCalls[call.peer];
+        render();
+    });
+}
 
-    document.getElementById('master-toggle').onchange = function() {
-        state.isMaster = this.checked;
-        log(state.isMaster ? "CORE_STATE: MASTER_NODE" : "CORE_STATE: OBSERVER", "sys");
-        if(state.isMaster) { window.bT = setInterval(brain, Profiles[state.speed].i); }
-        else { clearInterval(window.bT); }
-    };
+function setS(s) { STATE = s; render(); }
 
-    document.getElementById('spd-sld').oninput = function() {
-        db.ref('orakel_v6_final').update({ spd: this.value });
-    };
+function render() {
+    const root = document.getElementById('root');
+    let html = '';
 
-    // --- INIT ---
-    window.onload = () => {
-        if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
-        initNetwork();
-        setInterval(() => document.getElementById('sys-clock').innerText = new Date().toLocaleTimeString([], {hour12:false}), 1000);
-        log("BIT_ORAKUL_V6_READY // WAITING_FOR_SYNC", "sys");
-    };
+    if (STATE === 'idle' || STATE === 'joining') {
+        const label = STATE === 'idle' ? 'START' : 'SYNCING...';
+        html = `
+            <div class="orb" onclick="startSession()">
+                <div class="ring"></div><div class="ring"></div>
+                <div class="orb-face">
+                    <svg class="orb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                    <span class="orb-tag">${label}</span>
+                </div>
+            </div>`;
+    } else if (STATE === 'connected') {
+        const userList = participants.map(pid => {
+            const isMe = pid === myPeerId;
+            const isLive = isMe || activeCalls[pid];
+            return `
+                <div class="user-item ${isMe ? 'me' : ''}">
+                    <span class="user-id">${pid} ${isMe ? '(YOU)' : ''}</span>
+                    <span class="user-status" style="color: ${isLive ? 'var(--green)' : 'var(--muted)'}">
+                        ${isLive ? '● LIVE' : 'WAITING'}
+                    </span>
+                </div>`;
+        }).join('');
 
+        html = `
+            <div class="call-sec">
+                <div class="room-badge"><div class="bdot"></div>ROOM: ${roomName}</div>
+                <div class="user-list">${userList}</div>
+                <button class="hang" onclick="exitApp()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--red)"><path d="M23.71 16.67C20.66 13.78 16.54 12 12 12c-4.54 0-8.66 1.78-11.71 4.67-.18.18-.29.43-.29.71 0 .28.11.53.29.71l2.48 2.48c.18.18.43.29.71.29.27 0 .52-.11.7-.28.79-.74 1.69-1.36 2.66-1.85.33-.16.56-.5.56-.9v-3.1c1.45-.47 3-.73 4.6-.73 1.6 0 3.15.26 4.6.72v3.1c0 .4.23.74.56.9.98.49 1.87 1.12 2.66 1.85.18.18.43.28.7.28.28 0 .53-.11.71-.29l2.48-2.48c.18-.18.29-.43.29-.71 0-.28-.11-.53-.29-.71z"/></svg>
+                </button>
+            </div>`;
+    }
+
+    root.innerHTML = `<div class="card"><div class="logo">COMMUNIKATOR</div>${html}</div>`;
+}
+
+// Запуск при загрузке
+window.onload = () => {
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+        // Если зашли по ссылке, просим один раз кликнуть по шару для звука
+        render(); 
+    } else {
+        render();
+    }
+};
 </script>
-
 </body>
 </html>
